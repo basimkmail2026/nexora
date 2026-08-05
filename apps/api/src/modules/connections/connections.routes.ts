@@ -7,6 +7,11 @@ import { redis } from "../../lib/redis.js";
 
 type SecretConfig = Record<string, unknown>;
 
+type GeminiSettings = {
+  model?: string;
+  systemInstruction?: string;
+};
+
 export const connectionsRouter = Router();
 connectionsRouter.use(requireAuth, requireAdmin);
 
@@ -101,6 +106,54 @@ connectionsRouter.put("/:code", async (req: AuthRequest, res) => {
   res.json({ ok: true, id: row.id });
 });
 
+connectionsRouter.get("/:code/models", async (req, res) => {
+  const code = String(req.params.code);
+  const row = await prisma.serviceConnection.findUnique({ where: { code } });
+
+  if (!row) {
+    return res.status(404).json({ error: "الاتصال غير موجود" });
+  }
+
+  if (row.code !== "gemini") {
+    return res.status(400).json({ error: "جلب النماذج متاح حاليًا لـ Gemini فقط" });
+  }
+
+  const config = row.configCipher
+    ? decryptJson<Record<string, any>>(row.configCipher) || {}
+    : {};
+
+  const apiKey = config.apiKey;
+  if (!apiKey) {
+    return res.status(400).json({ error: "احفظ مفتاح Gemini أولًا" });
+  }
+
+  const baseUrl = String(
+    config.baseUrl || "https://generativelanguage.googleapis.com/v1beta"
+  ).replace(/\/+$/, "");
+
+  const response = await fetch(
+    `${baseUrl}/models?key=${encodeURIComponent(apiKey)}`
+  );
+  const data: any = await response.json();
+
+  if (!response.ok) {
+    return res.status(response.status).json({
+      error: data?.error?.message || `HTTP ${response.status}`
+    });
+  }
+
+  const models = (data?.models || [])
+    .filter((model: any) =>
+      Array.isArray(model.supportedGenerationMethods) &&
+      model.supportedGenerationMethods.includes("generateContent")
+    )
+    .map((model: any) => String(model.name || "").replace(/^models\//, ""))
+    .filter(Boolean)
+    .sort();
+
+  res.json({ models });
+});
+
 connectionsRouter.post("/:code/test", async (req, res) => {
   const code = String(req.params.code);
   const row = await prisma.serviceConnection.findUnique({ where: { code } });
@@ -112,7 +165,7 @@ connectionsRouter.post("/:code/test", async (req, res) => {
   const config = row.configCipher
     ? decryptJson<Record<string, any>>(row.configCipher) || {}
     : {};
-  const publicSettings = (row.publicSettings || {}) as Record<string, any>;
+  const publicSettings = (row.publicSettings || {}) as GeminiSettings;
   const started = Date.now();
 
   try {
@@ -142,7 +195,6 @@ connectionsRouter.post("/:code/test", async (req, res) => {
       );
 
       const data: any = await response.json();
-
       if (!response.ok) {
         throw new Error(data?.error?.message || `HTTP ${response.status}`);
       }

@@ -84,3 +84,65 @@ main{height:100vh;display:grid;grid-template-columns:260px 1fr}aside{background:
     grid-template-columns: 1fr;
   }
 }
+
+
+/* NEXORA_ADMIN_FIRST_AI */
+.connectionEditor {
+  margin-top: 18px;
+}
+
+.connectionEditor .formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 18px 0;
+}
+
+.connectionEditor label {
+  display: grid;
+  gap: 7px;
+}
+
+.connectionEditor input,
+.connectionEditor select,
+.connectionEditor textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.connectionEditor .fullWidth {
+  grid-column: 1 / -1;
+}
+
+.connectionEditor .toggleLine {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.connectionEditor .toggleLine input {
+  width: auto;
+}
+
+.notice {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--primary, #6366f1);
+  border-radius: 10px;
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.connectionRow small {
+  display: block;
+  margin-top: 4px;
+}
+
+.wrapButtons {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 700px) {
+  .connectionEditor .formGrid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -63,13 +63,16 @@ async function main() {
 
   await prisma.aiProvider.upsert({
     where: { id: "gemini-default" },
-    update: {},
+    update: {
+      enabled: true,
+      defaultModel: process.env.GEMINI_MODEL || "gemini-3.5-flash"
+    },
     create: {
       id: "gemini-default",
       name: "Google Gemini",
       type: "GEMINI",
       enabled: true,
-      defaultModel: process.env.GEMINI_MODEL || "gemini-3.6-flash"
+      defaultModel: process.env.GEMINI_MODEL || "gemini-3.5-flash"
     }
   });
 
@@ -102,6 +105,28 @@ async function main() {
     update: {},
     create: { key: "marketplace_categories", value: ["دعم العملاء","المبيعات","التعليم","البرمجة","المحاسبة","المطاعم","العيادات"] }
   });
+  const existingGeminiConnection = await prisma.serviceConnection.findUnique({
+    where: { code: "gemini" }
+  });
+
+  const existingGeminiSettings = (existingGeminiConnection?.publicSettings || {}) as Record<string, any>;
+  const existingGeminiModel = String(existingGeminiSettings.model || "");
+
+  if (
+    existingGeminiConnection &&
+    (!existingGeminiModel || existingGeminiModel === "gemini-2.5-flash" || existingGeminiModel === "gemini-3.6-flash")
+  ) {
+    await prisma.serviceConnection.update({
+      where: { code: "gemini" },
+      data: {
+        publicSettings: {
+          ...existingGeminiSettings,
+          model: process.env.GEMINI_MODEL || "gemini-3.5-flash"
+        }
+      }
+    });
+  }
+
   for (const connection of [
     { code: "gemini", name: "Google Gemini", kind: "AI" as const },
     { code: "openai", name: "OpenAI", kind: "AI" as const },
@@ -116,7 +141,13 @@ async function main() {
     await prisma.serviceConnection.upsert({
       where: { code: connection.code },
       update: {},
-      create: { ...connection, enabled: false }
+      create: {
+        ...connection,
+        enabled: false,
+        publicSettings: connection.code === "gemini"
+          ? { model: process.env.GEMINI_MODEL || "gemini-3.5-flash" }
+          : {}
+      }
     });
   }
 }

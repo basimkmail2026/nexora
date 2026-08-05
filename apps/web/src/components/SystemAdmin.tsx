@@ -24,19 +24,21 @@ type GeminiForm = {
   mode: "test" | "live";
 };
 
-const DEFAULT_GEMINI_MODEL = "gemini-3.6-flash";
+const FALLBACK_GEMINI_MODEL = "gemini-3.5-flash";
 
 export default function SystemAdmin({ onClose }: { onClose: () => void }) {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [health, setHealth] = useState<any>(null);
   const [backups, setBackups] = useState<any[]>([]);
   const [editing, setEditing] = useState<Connection | null>(null);
+  const [models, setModels] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [loadingModels, setLoadingModels] = useState(false);
   const [message, setMessage] = useState("");
   const [gemini, setGemini] = useState<GeminiForm>({
     apiKey: "",
-    model: DEFAULT_GEMINI_MODEL,
+    model: FALLBACK_GEMINI_MODEL,
     baseUrl: "https://generativelanguage.googleapis.com/v1beta",
     systemInstruction: "أنت مساعد نكسورا. أجب بلغة المستخدم بوضوح ودقة.",
     enabled: true,
@@ -61,12 +63,13 @@ export default function SystemAdmin({ onClose }: { onClose: () => void }) {
 
   function openConnection(connection: Connection) {
     setMessage("");
+    setModels([]);
     setEditing(connection);
 
     if (connection.code === "gemini") {
       setGemini({
         apiKey: "",
-        model: connection.publicSettings?.model || DEFAULT_GEMINI_MODEL,
+        model: connection.publicSettings?.model || FALLBACK_GEMINI_MODEL,
         baseUrl:
           connection.publicSettings?.baseUrl ||
           "https://generativelanguage.googleapis.com/v1beta",
@@ -105,13 +108,28 @@ export default function SystemAdmin({ onClose }: { onClose: () => void }) {
         })
       });
 
-      setMessage("تم حفظ إعدادات Gemini. تغيير الموديل يعمل فورًا بدون Deploy.");
+      setMessage("تم حفظ إعدادات Gemini. التغييرات تعمل فورًا بدون Deploy.");
       setGemini(current => ({ ...current, apiKey: "" }));
       await load();
     } catch (error: any) {
       setMessage(error.message || "فشل حفظ الإعدادات");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function loadModels() {
+    setLoadingModels(true);
+    setMessage("");
+
+    try {
+      const result = await api("/admin/connections/gemini/models");
+      setModels(result.models || []);
+      setMessage(`تم جلب ${result.models?.length || 0} موديل متاح لحسابك.`);
+    } catch (error: any) {
+      setMessage(error.message || "تعذر جلب الموديلات");
+    } finally {
+      setLoadingModels(false);
     }
   }
 
@@ -239,8 +257,9 @@ export default function SystemAdmin({ onClose }: { onClose: () => void }) {
             <label>
               <span>الموديل</span>
               <input
+                list="gemini-model-options"
                 value={gemini.model}
-                placeholder={DEFAULT_GEMINI_MODEL}
+                placeholder={FALLBACK_GEMINI_MODEL}
                 onChange={event =>
                   setGemini(current => ({
                     ...current,
@@ -248,6 +267,9 @@ export default function SystemAdmin({ onClose }: { onClose: () => void }) {
                   }))
                 }
               />
+              <datalist id="gemini-model-options">
+                {models.map(model => <option value={model} key={model} />)}
+              </datalist>
             </label>
 
             <label>
@@ -308,9 +330,17 @@ export default function SystemAdmin({ onClose }: { onClose: () => void }) {
             </label>
           </div>
 
-          <div className="buttonRow">
+          <div className="buttonRow wrapButtons">
             <button disabled={saving} onClick={saveGemini}>
               {saving ? "جاري الحفظ..." : "حفظ الإعدادات"}
+            </button>
+
+            <button
+              className="secondary"
+              disabled={loadingModels}
+              onClick={loadModels}
+            >
+              {loadingModels ? "جاري الجلب..." : "جلب الموديلات المتاحة"}
             </button>
 
             <button

@@ -2,6 +2,8 @@ import { env } from "../../config/env.js";
 import { decryptJson } from "../../lib/crypto.js";
 import { prisma } from "../../lib/prisma.js";
 
+type ChatMessage = { role: string; content: string };
+
 type GeminiSecretConfig = {
   apiKey?: string;
   baseUrl?: string;
@@ -12,7 +14,41 @@ type GeminiPublicSettings = {
   systemInstruction?: string;
 };
 
-export async function generateReply(messages: Array<{ role: string; content: string }>) {
+function normalizeGeminiContents(messages: ChatMessage[]) {
+  const normalized = messages
+    .filter(message => message.content?.trim())
+    .map(message => ({
+      role: message.role === "assistant" ? "model" as const : "user" as const,
+      parts: [{ text: message.content.trim() }]
+    }));
+
+  const merged: Array<{
+    role: "user" | "model";
+    parts: Array<{ text: string }>;
+  }> = [];
+
+  for (const message of normalized) {
+    const last = merged[merged.length - 1];
+
+    if (last?.role === message.role) {
+      last.parts[0].text += `\n${message.parts[0].text}`;
+    } else {
+      merged.push(message);
+    }
+  }
+
+  while (merged.length && merged[merged.length - 1].role === "model") {
+    merged.pop();
+  }
+
+  if (!merged.length || merged[merged.length - 1].role !== "user") {
+    throw new Error("يجب أن تنتهي المحادثة برسالة من المستخدم");
+  }
+
+  return merged;
+}
+
+export async function generateReply(messages: ChatMessage[]) {
   const connection = await prisma.serviceConnection.findUnique({
     where: { code: "gemini" }
   });
@@ -25,9 +61,9 @@ export async function generateReply(messages: Array<{ role: string; content: str
 
   const apiKey = secrets.apiKey || env.GEMINI_API_KEY;
   const model = settings.model || env.GEMINI_MODEL;
-  const baseUrl =
-    secrets.baseUrl?.replace(/\/+$/, "") ||
-    "https://generativelanguage.googleapis.com/v1beta";
+  const baseUrl = (
+    secrets.baseUrl || "https://generativelanguage.googleapis.com/v1beta"
+  ).replace(/\/+$/, "");
 
   if (connection && !connection.enabled) {
     throw new Error("مزود Gemini غير مفعّل من لوحة التحكم");
@@ -54,36 +90,7 @@ export async function generateReply(messages: Array<{ role: string; content: str
               "أنت مساعد نكسورا. أجب بلغة المستخدم بوضوح ودقة."
           }]
         },
-        contents: (() => {
-          const normalized = messages
-            .filter(message => message.content?.trim())
-            .map(message => ({
-              role: message.role === "assistant" ? "model" : "user",
-              parts: [{ text: message.content.trim() }]
-            }));
-
-          const merged: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
-
-          for (const message of normalized) {
-            const last = merged[merged.length - 1];
-
-            if (last?.role === message.role) {
-              last.parts[0].text += `\n${message.parts[0].text}`;
-            } else {
-              merged.push(message as { role: "user" | "model"; parts: Array<{ text: string }> });
-            }
-          }
-
-          while (merged.length && merged[merged.length - 1].role === "model") {
-            merged.pop();
-          }
-
-          if (!merged.length || merged[merged.length - 1].role !== "user") {
-            throw new Error("يجب أن تنتهي المحادثة برسالة من المستخدم");
-          }
-
-          return merged;
-        })()
+        contents: normalizeGeminiContents(messages)
       })
     }
   );
