@@ -19,7 +19,7 @@ import { analyticsRouter } from "./modules/analytics/analytics.routes.js";
 import { whiteLabelRouter } from "./modules/white-label/white-label.routes.js";
 import { voiceRouter } from "./modules/voice/voice.routes.js";
 import { apiLog } from "./middleware/api-log.js";
-import pinoHttp from "pino-http";
+import { pinoHttp } from "pino-http";
 import { logger } from "./lib/logger.js";
 import { requestId, noStoreSensitive } from "./middleware/security.js";
 import { connectionsRouter } from "./modules/connections/connections.routes.js";

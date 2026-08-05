@@ -18,7 +18,7 @@ chatRouter.get("/conversations", requireAuth, async (req: AuthRequest, res) => {
 
 chatRouter.get("/conversations/:id", requireAuth, async (req: AuthRequest, res) => {
   const conversation = await prisma.conversation.findFirst({
-    where: { id: req.params.id, userId: req.auth!.userId },
+    where: { id: String(req.params.id), userId: req.auth!.userId },
     include: { messages: { orderBy: { createdAt: "asc" } } }
   });
   if (!conversation) return res.status(404).json({ error: "المحادثة غير موجودة" });
@@ -27,7 +27,7 @@ chatRouter.get("/conversations/:id", requireAuth, async (req: AuthRequest, res) 
 
 chatRouter.delete("/conversations/:id", requireAuth, async (req: AuthRequest, res) => {
   await prisma.conversation.deleteMany({
-    where: { id: req.params.id, userId: req.auth!.userId }
+    where: { id: String(req.params.id), userId: req.auth!.userId }
   });
   res.json({ ok: true });
 });

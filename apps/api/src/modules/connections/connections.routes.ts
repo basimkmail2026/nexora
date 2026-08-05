@@ -36,7 +36,7 @@ connectionsRouter.put("/:code", async (req: AuthRequest, res) => {
   }).parse(req.body);
 
   const row = await prisma.serviceConnection.upsert({
-    where: { code: req.params.code },
+    where: { code: String(req.params.code) },
     update: {
       name: body.name,
       kind: body.kind,
@@ -48,7 +48,7 @@ connectionsRouter.put("/:code", async (req: AuthRequest, res) => {
       lastError: null
     },
     create: {
-      code: req.params.code,
+      code: String(req.params.code),
       name: body.name,
       kind: body.kind,
       enabled: body.enabled,
@@ -73,7 +73,7 @@ connectionsRouter.put("/:code", async (req: AuthRequest, res) => {
 });
 
 connectionsRouter.post("/:code/test", async (req, res) => {
-  const row = await prisma.serviceConnection.findUnique({ where: { code: req.params.code } });
+  const row = await prisma.serviceConnection.findUnique({ where: { code: String(req.params.code) } });
   if (!row) return res.status(404).json({ error: "الاتصال غير موجود" });
 
   const config = decryptJson<Record<string, any>>(row.configCipher) || {};

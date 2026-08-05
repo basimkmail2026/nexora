@@ -6,7 +6,7 @@ import { providerFactory } from "./providers.js";
 export const webhookRouter = Router();
 
 webhookRouter.post("/:gatewayCode", async (req, res) => {
-  const gateway = await prisma.paymentGateway.findUnique({ where: { code: req.params.gatewayCode } });
+  const gateway = await prisma.paymentGateway.findUnique({ where: { code: String(req.params.gatewayCode) } });
   if (!gateway) return res.status(404).json({ error: "بوابة غير معروفة" });
 
   const rawBody = JSON.stringify(req.body || {});

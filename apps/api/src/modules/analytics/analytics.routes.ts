@@ -7,7 +7,7 @@ analyticsRouter.use(requireAuth);
 
 analyticsRouter.get("/assistants/:assistantId", async (req: AuthRequest, res) => {
   const assistant = await prisma.assistant.findFirst({
-    where: { id: req.params.assistantId, userId: req.auth!.userId }
+    where: { id: String(req.params.assistantId), userId: req.auth!.userId }
   });
   if (!assistant) return res.status(404).json({ error: "المساعد غير موجود" });
 

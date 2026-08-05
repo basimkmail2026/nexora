@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import Decimal from "decimal.js";
+import { Decimal } from "decimal.js";
 import { prisma } from "../../lib/prisma.js";
 import { AuthRequest, requireAuth } from "../../middleware/auth.js";
 import { decryptJson } from "../../lib/crypto.js";

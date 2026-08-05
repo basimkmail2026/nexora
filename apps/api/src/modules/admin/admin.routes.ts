@@ -21,7 +21,7 @@ adminRouter.get("/users", async (_req, res) => {
 
 adminRouter.put("/users/:id/status", async (req: AuthRequest, res) => {
   const status = z.enum(["ACTIVE", "SUSPENDED", "PENDING_VERIFICATION"]).parse(req.body?.status);
-  const user = await prisma.user.update({ where: { id: req.params.id }, data: { status } });
+  const user = await prisma.user.update({ where: { id: String(req.params.id) }, data: { status } });
   await prisma.auditLog.create({
     data: { actorId: req.auth!.userId, action: "USER_STATUS_UPDATE", entityType: "User", entityId: user.id, metadata: { status } }
   });
@@ -41,7 +41,7 @@ adminRouter.put("/plans/:id", async (req: AuthRequest, res) => {
     assistantLimit: z.number().int().min(0).optional(),
     active: z.boolean().optional()
   }).parse(req.body);
-  const plan = await prisma.plan.update({ where: { id: req.params.id }, data: body });
+  const plan = await prisma.plan.update({ where: { id: String(req.params.id) }, data: body });
   res.json(plan);
 });
 
@@ -59,7 +59,7 @@ adminRouter.get("/settings", async (_req, res) => {
 });
 
 adminRouter.put("/settings/:key", async (req: AuthRequest, res) => {
-  const key = z.string().min(2).max(80).parse(req.params.key);
+  const key = z.string().min(2).max(80).parse(String(req.params.key));
   const value = req.body?.value;
   await prisma.appSetting.upsert({ where: { key }, update: { value }, create: { key, value } });
   await prisma.auditLog.create({
@@ -82,7 +82,7 @@ adminRouter.put("/providers/:id", async (req: AuthRequest, res) => {
     settings: z.any().optional()
   }).parse(req.body);
 
-  const provider = await prisma.aiProvider.update({ where: { id: req.params.id }, data: body });
+  const provider = await prisma.aiProvider.update({ where: { id: String(req.params.id) }, data: body });
   await prisma.auditLog.create({
     data: { actorId: req.auth!.userId, action: "AI_PROVIDER_UPDATE", entityType: "AiProvider", entityId: provider.id }
   });
@@ -97,7 +97,7 @@ adminRouter.get("/gateways", async (_req, res) => {
 
 adminRouter.put("/gateways/:id", async (req: AuthRequest, res) => {
   const body = z.object({ enabled: z.boolean().optional(), settings: z.any().optional() }).parse(req.body);
-  const gateway = await prisma.paymentGateway.update({ where: { id: req.params.id }, data: body });
+  const gateway = await prisma.paymentGateway.update({ where: { id: String(req.params.id) }, data: body });
   await prisma.auditLog.create({
     data: { actorId: req.auth!.userId, action: "PAYMENT_GATEWAY_UPDATE", entityType: "PaymentGateway", entityId: gateway.id }
   });

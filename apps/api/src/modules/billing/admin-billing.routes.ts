@@ -81,7 +81,7 @@ adminBillingRouter.put("/gateways/:id/config", async (req: AuthRequest, res) => 
   }).parse(req.body);
 
   const gateway = await prisma.paymentGateway.update({
-    where: { id: req.params.id },
+    where: { id: String(req.params.id) },
     data: {
       enabled: body.enabled,
       configCipher: encryptJson(body.config),
@@ -114,9 +114,9 @@ adminBillingRouter.put("/currencies/:code", async (req, res) => {
   }).parse(req.body);
 
   res.json(await prisma.currency.upsert({
-    where: { code: req.params.code.toUpperCase() },
+    where: { code: String(req.params.code).toUpperCase() },
     update: body,
-    create: { code: req.params.code.toUpperCase(), ...body }
+    create: { code: String(req.params.code).toUpperCase(), ...body }
   }));
 });
 

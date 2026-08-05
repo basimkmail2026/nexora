@@ -41,7 +41,7 @@ marketplaceRouter.get("/", async (req, res) => {
 
 marketplaceRouter.get("/:slug", async (req, res) => {
   const item = await prisma.marketplaceItem.findUnique({
-    where: { slug: req.params.slug },
+    where: { slug: String(req.params.slug) },
     include: {
       ownerUser: { select: { displayName: true } },
       reviews: { orderBy: { createdAt: "desc" }, take: 25 }
@@ -90,7 +90,7 @@ marketplaceRouter.post("/", requireAuth, async (req: AuthRequest, res) => {
 
 marketplaceRouter.post("/:id/publish", requireAuth, async (req: AuthRequest, res) => {
   const item = await prisma.marketplaceItem.findFirst({
-    where: { id: req.params.id, ownerUserId: req.auth!.userId }
+    where: { id: String(req.params.id), ownerUserId: req.auth!.userId }
   });
   if (!item) return res.status(404).json({ error: "العنصر غير موجود" });
 
@@ -101,7 +101,7 @@ marketplaceRouter.post("/:id/publish", requireAuth, async (req: AuthRequest, res
 });
 
 marketplaceRouter.post("/:id/install", requireAuth, async (req: AuthRequest, res) => {
-  const item = await prisma.marketplaceItem.findUnique({ where: { id: req.params.id } });
+  const item = await prisma.marketplaceItem.findUnique({ where: { id: String(req.params.id) } });
   if (!item || item.status !== "PUBLISHED") return res.status(404).json({ error: "العنصر غير موجود" });
 
   if (Number(item.price) > 0) {
@@ -145,22 +145,22 @@ marketplaceRouter.post("/:id/review", requireAuth, async (req: AuthRequest, res)
   }).parse(req.body);
 
   const review = await prisma.marketplaceReview.upsert({
-    where: { itemId_userId: { itemId: req.params.id, userId: req.auth!.userId } },
+    where: { itemId_userId: { itemId: String(req.params.id), userId: req.auth!.userId } },
     update: body,
-    create: { itemId: req.params.id, userId: req.auth!.userId, ...body }
+    create: { itemId: String(req.params.id), userId: req.auth!.userId, ...body }
   });
 
   const stats = await prisma.marketplaceReview.aggregate({
-    where: { itemId: req.params.id },
+    where: { itemId: String(req.params.id) },
     _avg: { rating: true },
     _count: { rating: true }
   });
 
   await prisma.marketplaceItem.update({
-    where: { id: req.params.id },
+    where: { id: String(req.params.id) },
     data: {
-      ratingAverage: stats._avg.rating || 0,
-      ratingCount: stats._count.rating
+      ratingAverage: stats._avg?.rating ?? 0,
+      ratingCount: typeof stats._count === "object" ? (stats._count.rating ?? 0) : 0
     }
   });
 

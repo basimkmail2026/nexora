@@ -97,7 +97,7 @@ assistantRouter.post("/", async (req: AuthRequest, res) => {
 
 assistantRouter.get("/:id", async (req: AuthRequest, res) => {
   const assistant = await prisma.assistant.findFirst({
-    where: { id: req.params.id, userId: req.auth!.userId },
+    where: { id: String(req.params.id), userId: req.auth!.userId },
     include: {
       knowledgeBases: { include: { documents: true, webSources: true } },
       faqItems: { orderBy: { sortOrder: "asc" } },
@@ -111,7 +111,7 @@ assistantRouter.get("/:id", async (req: AuthRequest, res) => {
 
 assistantRouter.put("/:id", async (req: AuthRequest, res) => {
   const existing = await prisma.assistant.findFirst({
-    where: { id: req.params.id, userId: req.auth!.userId }
+    where: { id: String(req.params.id), userId: req.auth!.userId }
   });
   if (!existing) return res.status(404).json({ error: "المساعد غير موجود" });
 
@@ -132,7 +132,7 @@ assistantRouter.put("/:id", async (req: AuthRequest, res) => {
 
 assistantRouter.post("/:id/publish", async (req: AuthRequest, res) => {
   const existing = await prisma.assistant.findFirst({
-    where: { id: req.params.id, userId: req.auth!.userId }
+    where: { id: String(req.params.id), userId: req.auth!.userId }
   });
   if (!existing) return res.status(404).json({ error: "المساعد غير موجود" });
 
@@ -145,7 +145,7 @@ assistantRouter.post("/:id/publish", async (req: AuthRequest, res) => {
 
 assistantRouter.delete("/:id", async (req: AuthRequest, res) => {
   await prisma.assistant.deleteMany({
-    where: { id: req.params.id, userId: req.auth!.userId }
+    where: { id: String(req.params.id), userId: req.auth!.userId }
   });
   res.json({ ok: true });
 });
@@ -154,7 +154,7 @@ assistantRouter.post("/:id/documents", upload.single("file"), async (req: AuthRe
   if (!req.file) return res.status(400).json({ error: "الملف مطلوب" });
 
   const assistant = await prisma.assistant.findFirst({
-    where: { id: req.params.id, userId: req.auth!.userId },
+    where: { id: String(req.params.id), userId: req.auth!.userId },
     include: { knowledgeBases: true }
   });
   if (!assistant) return res.status(404).json({ error: "المساعد غير موجود" });
@@ -199,8 +199,8 @@ assistantRouter.post("/:id/documents", upload.single("file"), async (req: AuthRe
 assistantRouter.delete("/:assistantId/documents/:documentId", async (req: AuthRequest, res) => {
   const doc = await prisma.document.findFirst({
     where: {
-      id: req.params.documentId,
-      knowledgeBase: { assistant: { id: req.params.assistantId, userId: req.auth!.userId } }
+      id: String(req.params.documentId),
+      knowledgeBase: { assistant: { id: String(req.params.assistantId), userId: req.auth!.userId } }
     }
   });
   if (!doc) return res.status(404).json({ error: "الملف غير موجود" });
@@ -211,7 +211,7 @@ assistantRouter.delete("/:assistantId/documents/:documentId", async (req: AuthRe
 
 assistantRouter.post("/:id/faqs", async (req: AuthRequest, res) => {
   const assistant = await prisma.assistant.findFirst({
-    where: { id: req.params.id, userId: req.auth!.userId }
+    where: { id: String(req.params.id), userId: req.auth!.userId }
   });
   if (!assistant) return res.status(404).json({ error: "المساعد غير موجود" });
 
@@ -228,8 +228,8 @@ assistantRouter.post("/:id/faqs", async (req: AuthRequest, res) => {
 assistantRouter.delete("/:assistantId/faqs/:faqId", async (req: AuthRequest, res) => {
   await prisma.faqItem.deleteMany({
     where: {
-      id: req.params.faqId,
-      assistant: { id: req.params.assistantId, userId: req.auth!.userId }
+      id: String(req.params.faqId),
+      assistant: { id: String(req.params.assistantId), userId: req.auth!.userId }
     }
   });
   res.json({ ok: true });
@@ -237,7 +237,7 @@ assistantRouter.delete("/:assistantId/faqs/:faqId", async (req: AuthRequest, res
 
 assistantRouter.post("/:id/api-keys", async (req: AuthRequest, res) => {
   const assistant = await prisma.assistant.findFirst({
-    where: { id: req.params.id, userId: req.auth!.userId }
+    where: { id: String(req.params.id), userId: req.auth!.userId }
   });
   if (!assistant) return res.status(404).json({ error: "المساعد غير موجود" });
 
@@ -258,8 +258,8 @@ assistantRouter.post("/:id/api-keys", async (req: AuthRequest, res) => {
 assistantRouter.delete("/:assistantId/api-keys/:keyId", async (req: AuthRequest, res) => {
   await prisma.assistantApiKey.updateMany({
     where: {
-      id: req.params.keyId,
-      assistant: { id: req.params.assistantId, userId: req.auth!.userId }
+      id: String(req.params.keyId),
+      assistant: { id: String(req.params.assistantId), userId: req.auth!.userId }
     },
     data: { revokedAt: new Date() }
   });
@@ -268,7 +268,7 @@ assistantRouter.delete("/:assistantId/api-keys/:keyId", async (req: AuthRequest,
 
 assistantRouter.put("/:id/widget", async (req: AuthRequest, res) => {
   const assistant = await prisma.assistant.findFirst({
-    where: { id: req.params.id, userId: req.auth!.userId }
+    where: { id: String(req.params.id), userId: req.auth!.userId }
   });
   if (!assistant) return res.status(404).json({ error: "المساعد غير موجود" });
 
@@ -319,7 +319,7 @@ assistantRouter.post("/:id/test-chat", async (req: AuthRequest, res) => {
   }).parse(req.body);
 
   const assistant = await prisma.assistant.findFirst({
-    where: { id: req.params.id, userId: req.auth!.userId }
+    where: { id: String(req.params.id), userId: req.auth!.userId }
   });
   if (!assistant) return res.status(404).json({ error: "المساعد غير موجود" });
 

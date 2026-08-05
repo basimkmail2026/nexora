@@ -246,7 +246,7 @@ authRouter.get("/sessions", requireAuth, async (req: AuthRequest, res) => {
 
 authRouter.delete("/sessions/:id", requireAuth, async (req: AuthRequest, res) => {
   await prisma.session.updateMany({
-    where: { id: req.params.id, userId: req.auth!.userId },
+    where: { id: String(req.params.id), userId: req.auth!.userId },
     data: { revokedAt: new Date() }
   });
   res.json({ ok: true });

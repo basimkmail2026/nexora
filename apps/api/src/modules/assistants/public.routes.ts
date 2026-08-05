@@ -14,7 +14,7 @@ publicAssistantRouter.post("/:assistantId/chat", async (req, res) => {
     where: { keyHash: sha256(apiKey) },
     include: { assistant: true }
   });
-  if (!key || key.revokedAt || key.assistantId !== req.params.assistantId) {
+  if (!key || key.revokedAt || key.assistantId !== String(req.params.assistantId)) {
     return res.status(401).json({ error: "API key غير صالح" });
   }
 
@@ -38,7 +38,7 @@ publicAssistantRouter.post("/:assistantId/chat", async (req, res) => {
 
 publicAssistantRouter.get("/:assistantId/widget-config", async (req, res) => {
   const assistant = await prisma.assistant.findFirst({
-    where: { id: req.params.assistantId, status: "PUBLISHED" },
+    where: { id: String(req.params.assistantId), status: "PUBLISHED" },
     include: { widget: true }
   });
   if (!assistant?.widget?.enabled) return res.status(404).json({ error: "الودجت غير متاح" });
@@ -61,7 +61,7 @@ publicAssistantRouter.post("/:assistantId/widget-chat", async (req, res) => {
   }).parse(req.body);
 
   const assistant = await prisma.assistant.findFirst({
-    where: { id: req.params.assistantId, status: "PUBLISHED" },
+    where: { id: String(req.params.assistantId), status: "PUBLISHED" },
     include: { widget: true }
   });
 
