@@ -54,10 +54,36 @@ export async function generateReply(messages: Array<{ role: string; content: str
               "أنت مساعد نكسورا. أجب بلغة المستخدم بوضوح ودقة."
           }]
         },
-        contents: messages.map(message => ({
-          role: message.role === "assistant" ? "model" : "user",
-          parts: [{ text: message.content }]
-        }))
+        contents: (() => {
+          const normalized = messages
+            .filter(message => message.content?.trim())
+            .map(message => ({
+              role: message.role === "assistant" ? "model" : "user",
+              parts: [{ text: message.content.trim() }]
+            }));
+
+          const merged: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
+
+          for (const message of normalized) {
+            const last = merged[merged.length - 1];
+
+            if (last?.role === message.role) {
+              last.parts[0].text += `\n${message.parts[0].text}`;
+            } else {
+              merged.push(message as { role: "user" | "model"; parts: Array<{ text: string }> });
+            }
+          }
+
+          while (merged.length && merged[merged.length - 1].role === "model") {
+            merged.pop();
+          }
+
+          if (!merged.length || merged[merged.length - 1].role !== "user") {
+            throw new Error("يجب أن تنتهي المحادثة برسالة من المستخدم");
+          }
+
+          return merged;
+        })()
       })
     }
   );
