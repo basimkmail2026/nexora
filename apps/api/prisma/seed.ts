@@ -69,7 +69,7 @@ async function main() {
       name: "Google Gemini",
       type: "GEMINI",
       enabled: true,
-      defaultModel: process.env.GEMINI_MODEL || "gemini-2.5-flash"
+      defaultModel: process.env.GEMINI_MODEL || "gemini-3.6-flash"
     }
   });
 
