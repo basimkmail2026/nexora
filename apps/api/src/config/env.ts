@@ -10,7 +10,7 @@ const schema = z.object({
   APP_URL: z.string().url(),
   CORS_ORIGIN: z.string().min(1),
   GEMINI_API_KEY: z.string().optional(),
-  GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
+  GEMINI_MODEL: z.string().default("gemini-3.6-flash"),
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().default(587),
   SMTP_SECURE: z.string().default("false").transform(v => v === "true"),
