@@ -1,30 +1,18 @@
 {
   "project": "Nexora | نكسورا",
-  "version": "1.5.0-stage6-rc",
-  "stage": 6,
-  "status": "release-candidate",
-  "included": [
-    "admin-managed external service connections",
-    "encrypted secrets",
-    "connection testing",
-    "test/live modes",
-    "redis cache abstraction",
-    "queue abstraction",
-    "embedding service",
-    "pgvector SQL setup",
-    "structured logging",
-    "request IDs",
-    "system health dashboard",
-    "backup jobs",
-    "Docker",
-    "initial automated tests"
-  ],
-  "requires_real_deployment_validation": [
-    "provider-specific payment signatures and endpoints",
-    "cloud object storage credentials",
-    "pgvector extension",
-    "Render deployment",
-    "end-to-end tests",
-    "security review"
+  "version": "1.6.0",
+  "status": "stable-reorganized",
+  "deployment": {
+    "platform": "Render",
+    "database_bootstrap": "automatic on start",
+    "shell_required": false
+  },
+  "fixes": [
+    "strict TypeScript build restored",
+    "Prisma create payloads normalized",
+    "Express 5 wildcard route fixed",
+    "frontend dist path fixed",
+    "database schema and seed run before server start",
+    "admin credentials refreshed idempotently"
   ]
 }
