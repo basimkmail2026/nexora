@@ -119,10 +119,21 @@ adminRouter.post("/platform-knowledge", async (req: AuthRequest, res) => {
     enabled: z.boolean().default(true),
     priority: z.number().int().default(0)
   }).parse(req.body);
+  const data = {
+    key: body.key,
+    titleAr: body.titleAr,
+    titleEn: body.titleEn,
+    contentAr: body.contentAr,
+    contentEn: body.contentEn,
+    category: body.category,
+    enabled: body.enabled,
+    priority: body.priority
+  };
+
   const row = await prisma.platformKnowledge.upsert({
     where: { key: body.key },
-    update: body,
-    create: body
+    update: data,
+    create: data
   });
   await prisma.auditLog.create({
     data: { actorId: req.auth!.userId, action: "PLATFORM_KNOWLEDGE_UPSERT", entityType: "PlatformKnowledge", entityId: row.id }
