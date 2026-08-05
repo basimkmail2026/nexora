@@ -103,3 +103,34 @@ adminRouter.put("/gateways/:id", async (req: AuthRequest, res) => {
   });
   res.json(gateway);
 });
+
+adminRouter.get("/platform-knowledge", async (_req, res) => {
+  res.json(await prisma.platformKnowledge.findMany({ orderBy: [{ priority: "desc" }, { updatedAt: "desc" }] }));
+});
+
+adminRouter.post("/platform-knowledge", async (req: AuthRequest, res) => {
+  const body = z.object({
+    key: z.string().min(2).max(80),
+    titleAr: z.string().min(2),
+    titleEn: z.string().optional(),
+    contentAr: z.string().min(2),
+    contentEn: z.string().optional(),
+    category: z.string().default("general"),
+    enabled: z.boolean().default(true),
+    priority: z.number().int().default(0)
+  }).parse(req.body);
+  const row = await prisma.platformKnowledge.upsert({
+    where: { key: body.key },
+    update: body,
+    create: body
+  });
+  await prisma.auditLog.create({
+    data: { actorId: req.auth!.userId, action: "PLATFORM_KNOWLEDGE_UPSERT", entityType: "PlatformKnowledge", entityId: row.id }
+  });
+  res.status(201).json(row);
+});
+
+adminRouter.delete("/platform-knowledge/:id", async (req: AuthRequest, res) => {
+  await prisma.platformKnowledge.delete({ where: { id: String(req.params.id) } });
+  res.json({ ok: true });
+});

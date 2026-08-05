@@ -1,17 +1,55 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { api } from "./lib/api";
+import { api, uploadFiles } from "./lib/api";
 import "./styles.css";
-import AssistantBuilder from "./components/AssistantBuilder";
-import Billing from "./components/Billing";
-import AdminBilling from "./components/AdminBilling";
-import Marketplace from "./components/Marketplace";
-import WhiteLabel from "./components/WhiteLabel";
-import Analytics from "./components/Analytics";
 import SystemAdmin from "./components/SystemAdmin";
+import Billing from "./components/Billing";
+import AssistantBuilder from "./components/AssistantBuilder";
+import Marketplace from "./components/Marketplace";
+import Analytics from "./components/Analytics";
 
-type Msg = { role: "user" | "assistant"; content: string };
-type AuthMode = "guest" | "login" | "register" | "forgot" | "reset" | "twofactor" | "app" | "admin" | "security" | "assistants" | "billing" | "adminBilling" | "marketplace" | "whiteLabel" | "analytics" | "systemAdmin";
+type Role = "user" | "assistant";
+type Msg = { role: Role; content: string };
+type UploadItem = { id: string; name: string; mimeType: string; sizeBytes: number; status: string };
+type View = "chat" | "assistants" | "billing" | "marketplace" | "analytics" | "settings" | "admin";
+type AdminTab = "overview" | "knowledge" | "connections";
+
+const dictionary = {
+  ar: {
+    dir: "rtl", language: "العربية", newChat: "محادثة جديدة", chats: "المحادثات", assistants: "المساعدون",
+    plans: "الباقات والفواتير", marketplace: "السوق", analytics: "التحليلات", settings: "الإعدادات",
+    admin: "لوحة الإدارة", logout: "تسجيل الخروج", welcome: "ماذا تريد أن ننجز اليوم؟",
+    welcomeSub: "اسأل، ارفع ملفًا أو صورة، أو تابع مشروعًا سابقًا.", placeholder: "اكتب رسالتك…",
+    send: "إرسال", attach: "إرفاق", guest: "تجربة كضيف", login: "تسجيل الدخول", register: "إنشاء حساب",
+    email: "البريد الإلكتروني", password: "كلمة المرور", forgot: "نسيت كلمة المرور", back: "رجوع",
+    copy: "نسخ", copied: "تم النسخ", thinking: "يفكر…", filesReady: "ملفات جاهزة للإرسال",
+    overview: "نظرة عامة", knowledge: "معرفة نكسورا", connections: "الاتصالات والذكاء",
+    madeIn: "صُنعت وطُوِّرت في فلسطين", addKnowledge: "إضافة معرفة", save: "حفظ", title: "العنوان",
+    content: "المحتوى", key: "المعرّف", category: "التصنيف", memory: "الذاكرة",
+    language: "اللغة", appearance: "المظهر", themeSystem: "حسب الجهاز", themeLight: "فاتح", themeDark: "داكن"
+  },
+  en: {
+    dir: "ltr", language: "English", newChat: "New chat", chats: "Chats", assistants: "Assistants",
+    plans: "Plans & billing", marketplace: "Marketplace", analytics: "Analytics", settings: "Settings",
+    admin: "Admin console", logout: "Log out", welcome: "What would you like to accomplish today?",
+    welcomeSub: "Ask a question, upload a file or image, or continue a previous project.", placeholder: "Type your message…",
+    send: "Send", attach: "Attach", guest: "Guest trial", login: "Log in", register: "Create account",
+    email: "Email", password: "Password", forgot: "Forgot password", back: "Back", copy: "Copy",
+    copied: "Copied", thinking: "Thinking…", filesReady: "Files ready to send", overview: "Overview",
+    knowledge: "Nexora knowledge", connections: "AI & connections", madeIn: "Created and developed in Palestine",
+    addKnowledge: "Add knowledge", save: "Save", title: "Title", content: "Content", key: "Key",
+    category: "Category", memory: "Memory", language: "Language", appearance: "Appearance",
+    themeSystem: "System", themeLight: "Light", themeDark: "Dark"
+  }
+} as const;
+
+type Locale = keyof typeof dictionary;
+
+function detectedLocale(): Locale {
+  const saved = localStorage.getItem("nexoraLocale");
+  if (saved === "ar" || saved === "en") return saved;
+  return navigator.language.toLowerCase().startsWith("ar") ? "ar" : "en";
+}
 
 function fingerprint() {
   let id = localStorage.getItem("nexoraFingerprint");
@@ -22,331 +60,282 @@ function fingerprint() {
   return id;
 }
 
-function App() {
-  const params = new URLSearchParams(location.search);
-  const resetToken = params.get("token") || "";
+function CopyBlock({ value, label, t }: { value: string; label?: string; t: any }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1400);
+  }
+  return <div className="copyBlock">
+    <div className="copyHead"><span>{label || "Text"}</span><button onClick={copy}>{copied ? t.copied : t.copy}</button></div>
+    <pre>{value}</pre>
+  </div>;
+}
 
-  const [mode, setMode] = useState<AuthMode>(resetToken ? "reset" : "guest");
-  const [guestId, setGuestId] = useState("");
-  const [remaining, setRemaining] = useState<number | null>(null);
-  const [messages, setMessages] = useState<Msg[]>([]);
-  const [input, setInput] = useState("");
-  const [conversationId, setConversationId] = useState<string>();
-  const [busy, setBusy] = useState(false);
+function MessageBody({ content, t }: { content: string; t: any }) {
+  const pieces = content.split(/```([\w-]*)\n?([\s\S]*?)```/g);
+  if (pieces.length === 1) return <div className="messageText">{content}</div>;
+  const output: React.ReactNode[] = [];
+  for (let i = 0; i < pieces.length; i += 3) {
+    if (pieces[i]?.trim()) output.push(<div className="messageText" key={`text-${i}`}>{pieces[i]}</div>);
+    if (pieces[i + 2] !== undefined) output.push(<CopyBlock key={`code-${i}`} value={pieces[i + 2].trim()} label={pieces[i + 1] || "Text"} t={t} />);
+  }
+  return <>{output}</>;
+}
+
+function AuthScreen({ locale, setLocale, onAuthenticated, onGuest }: any) {
+  const t = dictionary[locale as Locale];
+  const [mode, setMode] = useState<"login" | "register" | "forgot" | "twofactor">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const [challenge, setChallenge] = useState("");
+  const [code, setCode] = useState("");
+
+  async function submit() {
+    setBusy(true); setError("");
+    try {
+      if (mode === "twofactor") {
+        const data = await api("/auth/login/2fa", { method: "POST", body: JSON.stringify({ challenge, code }) });
+        localStorage.setItem("accessToken", data.accessToken);
+        localStorage.setItem("refreshToken", data.refreshToken);
+        onAuthenticated();
+      } else if (mode === "forgot") {
+        const result = await api("/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) });
+        setError(result.message);
+      } else {
+        const data = await api(`/auth/${mode}`, { method: "POST", body: JSON.stringify({ email, password }) });
+        if (data.requiresTwoFactor) { setChallenge(data.challenge); setMode("twofactor"); return; }
+        localStorage.setItem("accessToken", data.accessToken);
+        localStorage.setItem("refreshToken", data.refreshToken);
+        onAuthenticated();
+      }
+    } catch (e: any) { setError(e.message); } finally { setBusy(false); }
+  }
+
+  return <div className="authShell" dir={t.dir}>
+    <div className="authVisual">
+      <div className="brandMark">N</div>
+      <h1>Nexora</h1>
+      <p>{t.madeIn}</p>
+      <div className="heroGlow" />
+    </div>
+    <div className="authPanel">
+      <div className="topLocale">
+        <button onClick={() => setLocale(locale === "ar" ? "en" : "ar")}>{locale === "ar" ? "English" : "العربية"}</button>
+      </div>
+      <div className="authCard">
+        <span className="eyebrow">NEXORA AI WORKSPACE</span>
+        <h2>{mode === "register" ? t.register : mode === "forgot" ? t.forgot : mode === "twofactor" ? "Two-factor authentication" : t.login}</h2>
+        {mode !== "twofactor" && <input placeholder={t.email} value={email} onChange={e => setEmail(e.target.value)} />}
+        {mode !== "forgot" && mode !== "twofactor" && <input type="password" placeholder={t.password} value={password} onChange={e => setPassword(e.target.value)} />}
+        {mode === "twofactor" && <input inputMode="numeric" placeholder="123456" value={code} onChange={e => setCode(e.target.value)} />}
+        {error && <div className="inlineError">{error}</div>}
+        <button className="primaryAction" onClick={submit} disabled={busy}>{busy ? "…" : mode === "register" ? t.register : mode === "forgot" ? t.forgot : mode === "twofactor" ? "Verify" : t.login}</button>
+        <div className="authLinks">
+          <button onClick={() => setMode(mode === "register" ? "login" : "register")}>{mode === "register" ? t.login : t.register}</button>
+          <button onClick={() => setMode("forgot")}>{t.forgot}</button>
+        </div>
+        <button className="guestAction" onClick={onGuest}>{t.guest}</button>
+      </div>
+    </div>
+  </div>;
+}
+
+function AdminConsole({ t, me, onClose }: any) {
+  const [tab, setTab] = useState<AdminTab>("overview");
+  const [stats, setStats] = useState<any>(null);
+  const [knowledge, setKnowledge] = useState<any[]>([]);
+  const [form, setForm] = useState({ key: "", titleAr: "", titleEn: "", contentAr: "", contentEn: "", category: "general", priority: 0 });
+
+  async function load() {
+    const [statsData, knowledgeData] = await Promise.all([api("/admin/stats"), api("/admin/platform-knowledge")]);
+    setStats(statsData); setKnowledge(knowledgeData);
+  }
+  useEffect(() => { load(); }, []);
+  async function saveKnowledge() {
+    await api("/admin/platform-knowledge", { method: "POST", body: JSON.stringify({ ...form, enabled: true }) });
+    setForm({ key: "", titleAr: "", titleEn: "", contentAr: "", contentEn: "", category: "general", priority: 0 });
+    await load();
+  }
+
+  if (tab === "connections") return <SystemAdmin onClose={() => setTab("overview")} />;
+  return <div className="adminLayout">
+    <aside className="adminNav">
+      <div className="brand"><div className="brandMark tiny">N</div><div><b>Nexora Admin</b><small>{me?.email}</small></div></div>
+      <button className={tab === "overview" ? "active" : ""} onClick={() => setTab("overview")}>◫ {t.overview}</button>
+      <button className={tab === "knowledge" ? "active" : ""} onClick={() => setTab("knowledge")}>◇ {t.knowledge}</button>
+      <button onClick={() => setTab("connections")}>⌁ {t.connections}</button>
+      <div className="navSpacer" />
+      <button onClick={onClose}>← {t.back}</button>
+    </aside>
+    <section className="adminContent">
+      {tab === "overview" && <>
+        <div className="contentHead"><div><span className="eyebrow">CONTROL CENTER</span><h1>{t.admin}</h1></div></div>
+        <div className="metricGrid">{stats && Object.entries(stats).map(([key, value]) => <div className="metric" key={key}><span>{key}</span><b>{String(value)}</b><small>Live database metric</small></div>)}</div>
+        <div className="adminHero"><div><h2>One dashboard. Every system.</h2><p>Manage knowledge, AI providers, users, plans and platform behavior without touching deployment variables.</p></div><div className="adminOrb" /></div>
+      </>}
+      {tab === "knowledge" && <>
+        <div className="contentHead"><div><span className="eyebrow">OFFICIAL SOURCE OF TRUTH</span><h1>{t.knowledge}</h1><p>Everything saved here becomes verified context for Nexora answers.</p></div></div>
+        <div className="knowledgeGrid">
+          <div className="panel formPanel">
+            <h3>{t.addKnowledge}</h3>
+            <input placeholder={t.key} value={form.key} onChange={e => setForm({ ...form, key: e.target.value })} />
+            <input placeholder={`${t.title} (AR)`} value={form.titleAr} onChange={e => setForm({ ...form, titleAr: e.target.value })} />
+            <input placeholder={`${t.title} (EN)`} value={form.titleEn} onChange={e => setForm({ ...form, titleEn: e.target.value })} />
+            <input placeholder={t.category} value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} />
+            <textarea rows={7} placeholder={`${t.content} (AR)`} value={form.contentAr} onChange={e => setForm({ ...form, contentAr: e.target.value })} />
+            <textarea rows={7} placeholder={`${t.content} (EN)`} value={form.contentEn} onChange={e => setForm({ ...form, contentEn: e.target.value })} />
+            <button className="primaryAction" onClick={saveKnowledge}>{t.save}</button>
+          </div>
+          <div className="panel knowledgeList">
+            {knowledge.map(item => <article key={item.id}><div><span>{item.category}</span><h3>{item.titleAr}</h3><p>{item.contentAr}</p></div><button onClick={async () => { await api(`/admin/platform-knowledge/${item.id}`, { method: "DELETE" }); load(); }}>×</button></article>)}
+          </div>
+        </div>
+      </>}
+    </section>
+  </div>;
+}
+
+function UserSettings({ t, locale, setLocale, theme, setTheme }: any) {
+  return <div className="pageCanvas"><div className="contentHead"><div><span className="eyebrow">PERSONALIZATION</span><h1>{t.settings}</h1></div></div>
+    <div className="settingsGrid">
+      <div className="panel"><h3>{t.language}</h3><select value={locale} onChange={e => setLocale(e.target.value)}><option value="ar">العربية</option><option value="en">English</option></select><p>The interface opens using the device language on first visit.</p></div>
+      <div className="panel"><h3>{t.appearance}</h3><select value={theme} onChange={e => setTheme(e.target.value)}><option value="system">{t.themeSystem}</option><option value="light">{t.themeLight}</option><option value="dark">{t.themeDark}</option></select></div>
+      <div className="panel"><h3>{t.memory}</h3><p>Nexora stores only useful preferences and explicit facts. Memory controls and deletion are available in the next settings update.</p></div>
+    </div>
+  </div>;
+}
+
+function App() {
+  const [locale, setLocaleState] = useState<Locale>(detectedLocale());
+  const t = dictionary[locale];
+  const [theme, setThemeState] = useState(localStorage.getItem("nexoraTheme") || "system");
+  const [authenticated, setAuthenticated] = useState(Boolean(localStorage.getItem("accessToken")));
+  const [guestId, setGuestId] = useState("");
+  const [guestMode, setGuestMode] = useState(false);
   const [me, setMe] = useState<any>(null);
+  const [view, setView] = useState<View>("chat");
+  const [messages, setMessages] = useState<Msg[]>([]);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [conversationId, setConversationId] = useState<string>();
   const [conversations, setConversations] = useState<any[]>([]);
-  const [adminStats, setAdminStats] = useState<any>(null);
-  const [adminSettings, setAdminSettings] = useState<any>({});
-  const [providers, setProviders] = useState<any[]>([]);
-  const [gateways, setGateways] = useState<any[]>([]);
-  const [qr, setQr] = useState("");
-  const [secret, setSecret] = useState("");
-  const [backupCodes, setBackupCodes] = useState<string[]>([]);
-  const [sessions, setSessions] = useState<any[]>([]);
+  const [uploads, setUploads] = useState<UploadItem[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function setLocale(next: Locale) { setLocaleState(next); localStorage.setItem("nexoraLocale", next); }
+  function setTheme(next: string) { setThemeState(next); localStorage.setItem("nexoraTheme", next); }
 
   useEffect(() => {
-    document.body.classList.toggle("dark", matchMedia("(prefers-color-scheme: dark)").matches);
-    if (resetToken) return;
-    if (localStorage.getItem("accessToken")) {
-      setMode("app");
-      loadMe();
-    } else {
-      api("/auth/guest", {
-        method: "POST",
-        body: JSON.stringify({ fingerprint: fingerprint() })
-      }).then(d => { setGuestId(d.guestId); setRemaining(d.remaining); });
-    }
-  }, []);
+    document.documentElement.lang = locale;
+    document.documentElement.dir = t.dir;
+    const dark = theme === "dark" || (theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+    document.body.classList.toggle("dark", dark);
+  }, [locale, theme]);
 
   async function loadMe() {
     try {
-      const user = await api("/auth/me");
-      setMe(user);
-      loadConversations();
-    } catch {
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
-      setMode("guest");
-    }
+      const user = await api("/auth/me"); setMe(user); setAuthenticated(true);
+      setConversations(await api("/chat/conversations"));
+    } catch { setAuthenticated(false); localStorage.removeItem("accessToken"); }
+  }
+  useEffect(() => { if (authenticated) loadMe(); }, []);
+
+  async function startGuest() {
+    const data = await api("/auth/guest", { method: "POST", body: JSON.stringify({ fingerprint: fingerprint() }) });
+    setGuestId(data.guestId); setGuestMode(true);
   }
 
-  async function loadConversations() {
-    try { setConversations(await api("/chat/conversations")); } catch {}
-  }
-
-  async function authenticate(kind: "login" | "register") {
-    try {
-      const data = await api(`/auth/${kind}`, {
-        method: "POST",
-        body: JSON.stringify({ email, password })
-      });
-      if (data.requiresTwoFactor) {
-        setChallenge(data.challenge);
-        setMode("twofactor");
-        return;
-      }
-      localStorage.setItem("accessToken", data.accessToken);
-      localStorage.setItem("refreshToken", data.refreshToken);
-      setMode("app");
-      await loadMe();
-    } catch (e: any) { alert(e.message); }
-  }
-
-  async function verify2FA(useBackup = false) {
-    try {
-      const data = await api(useBackup ? "/auth/login/backup-code" : "/auth/login/2fa", {
-        method: "POST",
-        body: JSON.stringify({ challenge, code: twoFactorCode })
-      });
-      localStorage.setItem("accessToken", data.accessToken);
-      localStorage.setItem("refreshToken", data.refreshToken);
-      setMode("app");
-      await loadMe();
-    } catch (e: any) { alert(e.message); }
+  async function selectFiles(fileList: FileList | null) {
+    if (!fileList?.length || !authenticated) return;
+    setUploading(true);
+    try { setUploads(current => [...current, ...(await uploadFiles(Array.from(fileList)))]); }
+    catch (e: any) { alert(e.message); }
+    finally { setUploading(false); if (fileRef.current) fileRef.current.value = ""; }
   }
 
   async function send() {
     const text = input.trim();
-    if (!text || busy) return;
-    setInput("");
-    setMessages(v => [...v, { role: "user", content: text }]);
-    setBusy(true);
+    if ((!text && !uploads.length) || busy) return;
+    const displayText = text || (locale === "ar" ? "حلل الملفات المرفقة" : "Analyze the attached files");
+    setInput(""); setMessages(v => [...v, { role: "user", content: displayText }]); setBusy(true);
     try {
-      const path = mode === "app" || mode === "security" || mode === "admin" ? "/chat" : "/chat/guest";
-      const body = path === "/chat"
-        ? { message: text, conversationId }
-        : { guestId, message: text, conversationId };
+      const path = authenticated ? "/chat" : "/chat/guest";
+      const body = authenticated
+        ? { message: displayText, conversationId, attachmentIds: uploads.map(file => file.id), locale }
+        : { guestId, message: displayText, conversationId, locale };
       const data = await api(path, { method: "POST", body: JSON.stringify(body) });
-      setConversationId(data.conversationId);
-      setMessages(v => [...v, { role: "assistant", content: data.reply }]);
-      if (typeof data.remaining === "number") setRemaining(data.remaining);
-      if (path === "/chat") loadConversations();
-    } catch (e: any) {
-      setMessages(v => [...v, { role: "assistant", content: e.message }]);
-    } finally { setBusy(false); }
+      setConversationId(data.conversationId); setMessages(v => [...v, { role: "assistant", content: data.reply }]); setUploads([]);
+      if (authenticated) setConversations(await api("/chat/conversations"));
+    } catch (e: any) { setMessages(v => [...v, { role: "assistant", content: e.message }]); }
+    finally { setBusy(false); }
   }
 
   async function openConversation(id: string) {
     const data = await api(`/chat/conversations/${id}`);
-    setConversationId(id);
-    setMessages(data.messages.map((m: any) => ({ role: m.role, content: m.content })));
-  }
-
-  async function forgot() {
-    try {
-      const d = await api("/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) });
-      alert(d.message);
-      setMode("login");
-    } catch (e: any) { alert(e.message); }
-  }
-
-  async function resetPassword() {
-    try {
-      await api("/auth/reset-password", { method: "POST", body: JSON.stringify({ token: resetToken, password }) });
-      history.replaceState({}, "", "/");
-      alert("تم تغيير كلمة المرور");
-      setMode("login");
-    } catch (e: any) { alert(e.message); }
-  }
-
-  async function loadSecurity() {
-    setMode("security");
-    try {
-      setSessions(await api("/auth/sessions"));
-    } catch (e: any) { alert(e.message); }
-  }
-
-  async function setup2FA() {
-    const d = await api("/auth/2fa/setup", { method: "POST" });
-    setQr(d.qrCode); setSecret(d.secret);
-  }
-
-  async function enable2FA() {
-    const d = await api("/auth/2fa/enable", { method: "POST", body: JSON.stringify({ code: twoFactorCode }) });
-    setBackupCodes(d.backupCodes || []);
-    await loadMe();
-  }
-
-  async function loadAdmin() {
-    setMode("admin");
-    try {
-      const [stats, settings, p, g] = await Promise.all([
-        api("/admin/stats"), api("/admin/settings"), api("/admin/providers"), api("/admin/gateways")
-      ]);
-      setAdminStats(stats); setAdminSettings(settings); setProviders(p); setGateways(g);
-    } catch (e: any) { alert(e.message); }
-  }
-
-  async function saveSetting(key: string, value: any) {
-    await api(`/admin/settings/${key}`, { method: "PUT", body: JSON.stringify({ value }) });
-    alert("تم الحفظ");
+    setConversationId(id); setMessages(data.messages.map((m: any) => ({ role: m.role, content: m.content }))); setView("chat");
   }
 
   async function logout() {
-    try {
-      await api("/auth/logout", {
-        method: "POST",
-        body: JSON.stringify({ refreshToken: localStorage.getItem("refreshToken") })
-      });
-    } catch {}
-    localStorage.clear();
-    location.href = "/";
+    try { await api("/auth/logout", { method: "POST", body: JSON.stringify({ refreshToken: localStorage.getItem("refreshToken") }) }); } catch {}
+    localStorage.clear(); location.reload();
   }
 
-  if (["login","register","forgot","reset","twofactor"].includes(mode)) {
-    return (
-      <div className="auth">
-        <div className="card">
-          <div className="logo">N</div>
-          <h1>
-            {mode === "login" ? "تسجيل الدخول" :
-             mode === "register" ? "إنشاء حساب" :
-             mode === "forgot" ? "نسيت كلمة المرور" :
-             mode === "reset" ? "تعيين كلمة مرور جديدة" : "التحقق بخطوتين"}
-          </h1>
+  if (!authenticated && !guestMode) return <AuthScreen locale={locale} setLocale={setLocale} onAuthenticated={loadMe} onGuest={startGuest} />;
+  if (view === "admin") return <AdminConsole t={t} me={me} onClose={() => setView("chat")} />;
+  if (view === "assistants") return <AssistantBuilder onClose={() => setView("chat")} />;
+  if (view === "billing") return <Billing onClose={() => setView("chat")} />;
+  if (view === "marketplace") return <Marketplace onClose={() => setView("chat")} />;
+  if (view === "analytics") return <Analytics onClose={() => setView("chat")} />;
 
-          {(mode === "login" || mode === "register" || mode === "forgot") &&
-            <input placeholder="البريد الإلكتروني" value={email} onChange={e => setEmail(e.target.value)} />}
-
-          {(mode === "login" || mode === "register" || mode === "reset") &&
-            <input type="password" placeholder="كلمة المرور" value={password} onChange={e => setPassword(e.target.value)} />}
-
-          {mode === "twofactor" &&
-            <input placeholder="رمز المصادقة أو الرمز الاحتياطي" value={twoFactorCode} onChange={e => setTwoFactorCode(e.target.value)} />}
-
-          {mode === "login" && <>
-            <button onClick={() => authenticate("login")}>دخول</button>
-            <button className="link" onClick={() => setMode("forgot")}>نسيت كلمة المرور</button>
-            <button className="link" onClick={() => setMode("register")}>إنشاء حساب</button>
-          </>}
-          {mode === "register" && <button onClick={() => authenticate("register")}>إنشاء الحساب</button>}
-          {mode === "forgot" && <button onClick={forgot}>إرسال رابط الاستعادة</button>}
-          {mode === "reset" && <button onClick={resetPassword}>حفظ كلمة المرور الجديدة</button>}
-          {mode === "twofactor" && <>
-            <button onClick={() => verify2FA(false)}>تحقق</button>
-            <button className="link" onClick={() => verify2FA(true)}>استخدام رمز احتياطي</button>
-          </>}
-          <button className="link" onClick={() => setMode("guest")}>العودة</button>
-        </div>
-      </div>
-    );
-  }
-
-  if (mode === "security") {
-    return (
-      <div className="adminPage">
-        <header className="pageHead"><h1>الأمان والتحقق بخطوتين</h1><button onClick={() => setMode("app")}>رجوع</button></header>
-        <div className="grid2">
-          <div className="card">
-            <h2>تطبيق المصادقة</h2>
-            <p>الحالة: {me?.twoFactorEnabled ? "مفعّل" : "غير مفعّل"}</p>
-            {!me?.twoFactorEnabled && <>
-              <button onClick={setup2FA}>إنشاء QR Code</button>
-              {qr && <><img className="qr" src={qr}/><code>{secret}</code>
-                <input placeholder="أدخل رمز التطبيق" value={twoFactorCode} onChange={e => setTwoFactorCode(e.target.value)} />
-                <button onClick={enable2FA}>تفعيل</button></>}
-            </>}
-            {backupCodes.length > 0 && <div className="codes">{backupCodes.map(x => <code key={x}>{x}</code>)}</div>}
-          </div>
-          <div className="card">
-            <h2>الجلسات النشطة</h2>
-            {sessions.map(s => <div className="row" key={s.id}><span>{s.userAgent || "جهاز غير معروف"}</span>
-              <button onClick={async()=>{await api(`/auth/sessions/${s.id}`,{method:"DELETE"});loadSecurity()}}>إنهاء</button></div>)}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (mode === "assistants") return <AssistantBuilder onClose={() => setMode("app")} />;
-  if (mode === "billing") return <Billing onClose={() => setMode("app")} />;
-  if (mode === "adminBilling") return <AdminBilling onClose={() => setMode("admin")} />;
-  if (mode === "marketplace") return <Marketplace onClose={() => setMode("app")} />;
-  if (mode === "whiteLabel") return <WhiteLabel onClose={() => setMode("app")} />;
-  if (mode === "analytics") return <Analytics onClose={() => setMode("app")} />;
-  if (mode === "systemAdmin") return <SystemAdmin onClose={() => setMode("admin")} />;
-
-  if (mode === "admin") {
-    return (
-      <div className="adminPage">
-        <header className="pageHead"><h1>لوحة تحكم نكسورا</h1><button onClick={() => setMode("app")}>رجوع</button></header>
-        <div className="stats">
-          {adminStats && Object.entries(adminStats).map(([k,v]) => <div className="stat" key={k}><span>{k}</span><b>{String(v)}</b></div>)}
-        </div>
-        <div className="grid2">
-          <div className="card">
-            <h2>حدود الضيف</h2>
-            <input type="number" value={adminSettings?.guest_limits?.messages || 10}
-              onChange={e => setAdminSettings({...adminSettings, guest_limits:{...adminSettings.guest_limits,messages:Number(e.target.value)}})} />
-            <button onClick={()=>saveSetting("guest_limits",adminSettings.guest_limits)}>حفظ</button>
-          </div>
-          <div className="card">
-            <h2>إيميل الشركة</h2>
-            <input placeholder="اسم الشركة" value={adminSettings?.company_email?.companyName || ""}
-              onChange={e => setAdminSettings({...adminSettings,company_email:{...adminSettings.company_email,companyName:e.target.value}})} />
-            <input placeholder="بريد الإرسال" value={adminSettings?.company_email?.fromEmail || ""}
-              onChange={e => setAdminSettings({...adminSettings,company_email:{...adminSettings.company_email,fromEmail:e.target.value}})} />
-            <input placeholder="بريد الدعم" value={adminSettings?.company_email?.supportEmail || ""}
-              onChange={e => setAdminSettings({...adminSettings,company_email:{...adminSettings.company_email,supportEmail:e.target.value}})} />
-            <button onClick={()=>saveSetting("company_email",adminSettings.company_email)}>حفظ</button>
-          </div>
-          <div className="card">
-            <h2>مزودات الذكاء الاصطناعي</h2>
-            {providers.map(p => <div className="row" key={p.id}><span>{p.name} — {p.defaultModel}</span><span>{p.enabled?"مفعّل":"متوقف"}</span></div>)}
-          </div>
-          <div className="card">
-            <h2>بوابات الدفع</h2>
-            {gateways.map(g => <div className="row" key={g.id}><span>{g.name}</span><span>{g.enabled?"مفعّلة":"غير مفعّلة"}</span></div>)}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const title = mode === "app" ? (me?.email || "حسابك") : `تجربة ضيف${remaining !== null ? ` — متبقي ${remaining}` : ""}`;
-
-  return (
-    <main>
-      <aside>
-        <div className="brand"><div className="logo small">N</div><b>Nexora</b></div>
-        <p>{title}</p>
-        {mode !== "app" && <>
-          <button onClick={() => setMode("register")}>إنشاء حساب</button>
-          <button className="secondary" onClick={() => setMode("login")}>تسجيل الدخول</button>
+  return <div className="appShell">
+    <aside className="userSidebar">
+      <div className="brand"><div className="brandMark tiny">N</div><div><b>Nexora</b><small>{t.madeIn}</small></div></div>
+      <button className="newChat" onClick={() => { setConversationId(undefined); setMessages([]); setView("chat"); }}>＋ {t.newChat}</button>
+      <nav>
+        <button className={view === "chat" ? "active" : ""} onClick={() => setView("chat")}>◉ {t.chats}</button>
+        {authenticated && <>
+          <button onClick={() => setView("assistants")}>◇ {t.assistants}</button>
+          <button onClick={() => setView("billing")}>◫ {t.plans}</button>
+          <button onClick={() => setView("marketplace")}>⌂ {t.marketplace}</button>
+          <button onClick={() => setView("analytics")}>⌁ {t.analytics}</button>
+          <button onClick={() => setView("settings")}>⚙ {t.settings}</button>
+          {me && ["ADMIN", "SUPER_ADMIN"].includes(me.role) && <button onClick={() => setView("admin")}>▦ {t.admin}</button>}
         </>}
-        {mode === "app" && <>
-          <button onClick={() => {setConversationId(undefined);setMessages([])}}>محادثة جديدة</button>
-          <div className="convList">{conversations.map(c=><button className="conv" key={c.id} onClick={()=>openConversation(c.id)}>{c.title}</button>)}</div>
-          <button className="secondary" onClick={()=>setMode("assistants")}>منشئ المساعدين</button>
-          <button className="secondary" onClick={()=>setMode("billing")}>الباقات والفواتير</button>
-          <button className="secondary" onClick={()=>setMode("marketplace")}>Marketplace</button>
-          <button className="secondary" onClick={()=>setMode("analytics")}>التحليلات</button>
-          <button className="secondary" onClick={()=>setMode("whiteLabel")}>White Label</button>
-          <button className="secondary" onClick={loadSecurity}>الأمان و2FA</button>
-          {["ADMIN","SUPER_ADMIN"].includes(me?.role) && <><button className="secondary" onClick={loadAdmin}>لوحة التحكم</button><button className="secondary" onClick={()=>setMode("adminBilling")}>الإدارة المالية</button><button className="secondary" onClick={()=>setMode("systemAdmin")}>النظام والاتصالات</button></>}
-          <button className="secondary" onClick={logout}>تسجيل الخروج</button>
-        </>}
-      </aside>
-      <section className="chat">
-        <header><h2>مساعد نكسورا</h2><span>v1.5 Stage 6 RC</span></header>
-        <div className="messages">
-          {messages.length === 0 && <div className="welcome"><div className="logo big">N</div><h1>شو بتحب ننجز اليوم؟</h1><p>جرب كضيف أو سجل حسابك واحفظ محادثاتك.</p></div>}
-          {messages.map((m, i) => <div key={i} className={`msg ${m.role}`}>{m.content}</div>)}
-          {busy && <div className="msg assistant">بفكر...</div>}
+      </nav>
+      <div className="historyLabel">{t.chats}</div>
+      <div className="conversationList">{conversations.map(item => <button key={item.id} onClick={() => openConversation(item.id)} className={conversationId === item.id ? "selected" : ""}>{item.title}</button>)}</div>
+      <div className="sidebarBottom">
+        <button onClick={() => setLocale(locale === "ar" ? "en" : "ar")}>◎ {t.language}</button>
+        {authenticated ? <button onClick={logout}>↪ {t.logout}</button> : <button onClick={() => location.reload()}>{t.login}</button>}
+      </div>
+    </aside>
+
+    <section className="workspace">
+      {view === "settings" ? <UserSettings t={t} locale={locale} setLocale={setLocale} theme={theme} setTheme={setTheme} /> : <>
+        <header className="workspaceHead"><div><span className="statusDot" /> Nexora AI</div><span className="modelPill">Multimodal workspace</span></header>
+        <div className="chatStream">
+          {!messages.length && <div className="welcomeState"><div className="welcomeIcon">✦</div><h1>{t.welcome}</h1><p>{t.welcomeSub}</p><div className="suggestionGrid"><button onClick={() => setInput(locale === "ar" ? "ما هي باقات نكسورا؟" : "What are Nexora's plans?")}>◫ Plans</button><button onClick={() => fileRef.current?.click()}>⌁ Analyze a file</button><button onClick={() => setInput(locale === "ar" ? "أين صُنعت نكسورا؟" : "Where was Nexora created?")}>◇ About Nexora</button></div></div>}
+          {messages.map((message, index) => <article key={index} className={`chatMessage ${message.role}`}><div className="avatar">{message.role === "assistant" ? "N" : (me?.displayName?.[0] || "U")}</div><div className="bubble"><MessageBody content={message.content} t={t} />{message.role === "assistant" && <button className="messageCopy" onClick={() => navigator.clipboard.writeText(message.content)}>⌘ {t.copy}</button>}</div></article>)}
+          {busy && <article className="chatMessage assistant"><div className="avatar">N</div><div className="bubble typing"><span /><span /><span /> {t.thinking}</div></article>}
         </div>
-        <div className="composer">
-          <textarea value={input} onChange={e => setInput(e.target.value)} placeholder="اكتب رسالتك..." onKeyDown={e => {
-            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
-          }} />
-          <button onClick={send}>إرسال</button>
+        <div className="composerDock">
+          {!!uploads.length && <div className="uploadTray"><span>{t.filesReady}</span>{uploads.map(file => <div className="fileChip" key={file.id}><b>{file.mimeType.startsWith("image/") ? "▧" : file.mimeType.startsWith("video/") ? "▶" : "▤"}</b><span>{file.name}</span><button onClick={() => setUploads(list => list.filter(item => item.id !== file.id))}>×</button></div>)}</div>}
+          <div className="composerBox">
+            <input ref={fileRef} type="file" multiple hidden accept="image/*,video/*,audio/*,.pdf,.docx,.txt,.csv,.xlsx,.pptx,.json,.zip" onChange={e => selectFiles(e.target.files)} />
+            <button className="attachButton" disabled={!authenticated || uploading} onClick={() => fileRef.current?.click()} title={t.attach}>{uploading ? "…" : "＋"}</button>
+            <textarea value={input} onChange={e => setInput(e.target.value)} placeholder={t.placeholder} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} />
+            <button className="sendButton" onClick={send}>↑</button>
+          </div>
+          <small>Nexora can make mistakes. Verify important information.</small>
         </div>
-      </section>
-    </main>
-  );
+      </>}
+    </section>
+  </div>;
 }
 
 createRoot(document.getElementById("root")!).render(<App />);

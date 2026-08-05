@@ -24,6 +24,7 @@ import { logger } from "./lib/logger.js";
 import { requestId, noStoreSensitive } from "./middleware/security.js";
 import { connectionsRouter } from "./modules/connections/connections.routes.js";
 import { systemRouter } from "./modules/system/system.routes.js";
+import { uploadRouter } from "./modules/uploads/upload.routes.js";
 
 export const app = express();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -53,6 +54,7 @@ app.use("/api/white-label", whiteLabelRouter);
 app.use("/api/voice", voiceRouter);
 app.use("/api/admin/connections", connectionsRouter);
 app.use("/api/admin/system", systemRouter);
+app.use("/api/uploads", uploadRouter);
 
 if (env.NODE_ENV === "production") {
   const webDist = path.resolve(__dirname, "../../web/dist");

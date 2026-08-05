@@ -55,6 +55,9 @@ model User {
   assistants          Assistant[]
   marketplaceItems     MarketplaceItem[]
   apiUsageLogs         ApiUsageLog[]
+  preference           UserPreference?
+  memories             UserMemory[]
+  chatAttachments      ChatAttachment[]
   resetTokens         PasswordResetToken[]
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
@@ -67,6 +70,7 @@ model Guest {
   usageCount    Int            @default(0)
   expiresAt     DateTime
   conversations Conversation[]
+  chatAttachments ChatAttachment[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
@@ -123,6 +127,7 @@ model Conversation {
   guestId   String?
   guest     Guest?    @relation(fields: [guestId], references: [id], onDelete: Cascade)
   messages  Message[]
+  attachments ChatAttachment[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
@@ -742,4 +747,71 @@ model SystemHealthCheck {
 
   @@index([component])
   @@index([checkedAt])
+}
+
+model UserPreference {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  locale        String   @default("auto")
+  theme         String   @default("system")
+  memoryEnabled Boolean  @default(true)
+  translationEnabled Boolean @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model UserMemory {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key        String
+  value      String
+  category   String   @default("profile")
+  confidence Float    @default(0.7)
+  source     String   @default("conversation")
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, key])
+  @@index([userId, active])
+}
+
+model ChatAttachment {
+  id             String        @id @default(cuid())
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String?
+  user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guestId        String?
+  guest          Guest?        @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  originalName   String
+  mimeType       String
+  sizeBytes      Int
+  storagePath    String
+  extractedText  String?
+  status         String        @default("READY")
+  errorMessage   String?
+  createdAt      DateTime      @default(now())
+
+  @@index([userId])
+  @@index([guestId])
+  @@index([conversationId])
+}
+
+model PlatformKnowledge {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  titleAr   String
+  titleEn   String?
+  contentAr String
+  contentEn String?
+  category  String   @default("general")
+  enabled   Boolean  @default(true)
+  priority  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category, enabled])
 }

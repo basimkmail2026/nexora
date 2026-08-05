@@ -150,6 +150,18 @@ async function main() {
       }
     });
   }
+  for (const item of [
+    { key: "origin", titleAr: "مكان صناعة نكسورا", titleEn: "Where Nexora was created", contentAr: "نكسورا منصة ذكاء اصطناعي صُنعت وطُوِّرت في فلسطين.", contentEn: "Nexora is an AI platform created and developed in Palestine.", category: "identity", priority: 100 },
+    { key: "platform_summary", titleAr: "نبذة عن نكسورا", titleEn: "About Nexora", contentAr: "نكسورا مساحة عمل للذكاء الاصطناعي تساعد الأفراد والشركات على المحادثة مع الذكاء، إنشاء مساعدين، إدارة المعرفة، تحليل الملفات، وتنظيم الاشتراكات والخدمات من مكان واحد.", contentEn: "Nexora is an AI workspace for conversations, assistants, knowledge, file analysis, subscriptions and business workflows.", category: "identity", priority: 90 },
+    { key: "verified_answers", titleAr: "سياسة الإجابات الرسمية", titleEn: "Verified answer policy", contentAr: "عند السؤال عن الأسعار أو الباقات أو الخدمات، يجب الاعتماد على البيانات الحالية في النظام وعدم اختراع معلومات غير موجودة.", contentEn: "For prices, plans and services, use current system data and never invent unavailable information.", category: "policy", priority: 80 }
+  ]) {
+    await prisma.platformKnowledge.upsert({
+      where: { key: item.key },
+      update: item,
+      create: item
+    });
+  }
+
 }
 
 main().finally(() => prisma.$disconnect());
