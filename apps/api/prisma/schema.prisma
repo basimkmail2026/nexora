@@ -1,0 +1,745 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+enum SessionType {
+  USER
+  GUEST
+}
+
+enum AiProviderType {
+  GEMINI
+  OPENAI
+  CUSTOM
+}
+
+model User {
+  id                  String          @id @default(cuid())
+  email               String          @unique
+  passwordHash        String
+  displayName         String?
+  role                UserRole        @default(USER)
+  status              UserStatus      @default(ACTIVE)
+  emailVerifiedAt     DateTime?
+  twoFactorEnabled    Boolean         @default(false)
+  twoFactorSecret     String?
+  backupCodesHash     String[]
+  planId              String?
+  plan                Plan?           @relation(fields: [planId], references: [id])
+  subscriptions       Subscription[]
+  invoices            Invoice[]
+  payments            Payment[]
+  referrals           Referral[]        @relation("ReferralOwner")
+  referredBy          Referral?         @relation("ReferralReferredUser")
+  usageCount          Int             @default(0)
+  usageResetAt        DateTime?
+  sessions            Session[]
+  conversations       Conversation[]
+  assistants          Assistant[]
+  marketplaceItems     MarketplaceItem[]
+  apiUsageLogs         ApiUsageLog[]
+  resetTokens         PasswordResetToken[]
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+}
+
+model Guest {
+  id            String         @id @default(cuid())
+  fingerprint   String         @unique
+  ipHash        String?
+  usageCount    Int            @default(0)
+  expiresAt     DateTime
+  conversations Conversation[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Session {
+  id           String      @id @default(cuid())
+  userId       String
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type         SessionType @default(USER)
+  tokenHash    String
+  userAgent    String?
+  ipHash       String?
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  createdAt    DateTime    @default(now())
+
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Plan {
+  id             String   @id @default(cuid())
+  code           String   @unique
+  nameAr         String
+  nameEn         String
+  priceMonthly   Decimal  @default(0)
+  priceYearly    Decimal  @default(0)
+  messageLimit   Int
+  voiceMinutes   Int      @default(0)
+  assistantLimit Int      @default(1)
+  active         Boolean  @default(true)
+  users          User[]
+  subscriptions  Subscription[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Conversation {
+  id        String    @id @default(cuid())
+  title     String
+  userId    String?
+  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guestId   String?
+  guest     Guest?    @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  messages  Message[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([guestId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  content        String
+  tokens         Int          @default(0)
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId])
+}
+
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model AiProvider {
+  id            String         @id @default(cuid())
+  name          String
+  type          AiProviderType
+  enabled       Boolean        @default(false)
+  apiKeyCipher  String?
+  baseUrl       String?
+  defaultModel  String?
+  settings      Json           @default("{}")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model PaymentGateway {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  name         String
+  enabled      Boolean  @default(false)
+  configCipher String?
+  settings     Json     @default("{}")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String?
+  entityId   String?
+  metadata   Json     @default("{}")
+  ipHash     String?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+}
+
+
+enum AssistantStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum DocumentStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+model Assistant {
+  id                  String           @id @default(cuid())
+  userId              String
+  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                String
+  slug                String           @unique
+  description         String?
+  avatarUrl           String?
+  language            String           @default("ar")
+  providerId          String?
+  model                String?
+  systemPrompt        String           @default("أنت مساعد ذكي مفيد.")
+  temperature         Float            @default(0.7)
+  maxOutputTokens     Int              @default(1200)
+  fallbackMessage     String           @default("ما عندي معلومات كافية للإجابة.")
+  status              AssistantStatus  @default(DRAFT)
+  publishedAt         DateTime?
+  knowledgeBases      KnowledgeBase[]
+  faqItems            FaqItem[]
+  apiKeys             AssistantApiKey[]
+  widget              AssistantWidget?
+  testConversations   AssistantConversation[]
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model KnowledgeBase {
+  id          String       @id @default(cuid())
+  assistantId String
+  assistant   Assistant    @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  documents   Document[]
+  webSources  WebSource[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([assistantId])
+}
+
+model Document {
+  id              String         @id @default(cuid())
+  knowledgeBaseId String
+  knowledgeBase   KnowledgeBase  @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  originalName    String
+  mimeType        String
+  sizeBytes       Int
+  storagePath     String?
+  extractedText   String?
+  status          DocumentStatus @default(PENDING)
+  errorMessage    String?
+  chunks          DocumentChunk[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([knowledgeBaseId])
+  @@index([status])
+}
+
+model DocumentChunk {
+  id          String   @id @default(cuid())
+  documentId  String
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  chunkIndex  Int
+  content     String
+  embedding   Json?
+  embeddingModel String?
+  tokenCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@unique([documentId, chunkIndex])
+  @@index([documentId])
+}
+
+model WebSource {
+  id              String        @id @default(cuid())
+  knowledgeBaseId String
+  knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  url             String
+  title           String?
+  extractedText   String?
+  enabled         Boolean       @default(true)
+  lastFetchedAt   DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([knowledgeBaseId])
+}
+
+model FaqItem {
+  id          String    @id @default(cuid())
+  assistantId String
+  assistant   Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  question    String
+  answer      String
+  enabled     Boolean   @default(true)
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([assistantId])
+}
+
+model AssistantApiKey {
+  id          String    @id @default(cuid())
+  assistantId String
+  assistant   Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  name        String
+  keyPrefix   String
+  keyHash     String    @unique
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([assistantId])
+}
+
+model AssistantWidget {
+  id             String    @id @default(cuid())
+  assistantId    String    @unique
+  assistant      Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  enabled        Boolean   @default(true)
+  primaryColor   String    @default("#6d4aff")
+  position       String    @default("bottom-right")
+  welcomeMessage String    @default("مرحبًا! كيف أقدر أساعدك؟")
+  allowedDomains String[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model AssistantConversation {
+  id          String    @id @default(cuid())
+  assistantId String
+  assistant   Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  sessionKey  String
+  messages    AssistantMessage[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([assistantId])
+  @@index([sessionKey])
+}
+
+model AssistantMessage {
+  id             String                @id @default(cuid())
+  conversationId String
+  conversation   AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  content        String
+  createdAt      DateTime              @default(now())
+
+  @@index([conversationId])
+}
+
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+enum BillingInterval {
+  MONTHLY
+  YEARLY
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  CANCELED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  OPEN
+  PAID
+  VOID
+  UNCOLLECTIBLE
+}
+
+enum CouponType {
+  PERCENT
+  FIXED
+}
+
+model Subscription {
+  id                  String             @id @default(cuid())
+  userId              String
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId              String
+  plan                Plan               @relation(fields: [planId], references: [id])
+  status              SubscriptionStatus @default(TRIALING)
+  interval            BillingInterval    @default(MONTHLY)
+  providerCode        String?
+  providerCustomerId  String?
+  providerSubscriptionId String?
+  currentPeriodStart  DateTime
+  currentPeriodEnd    DateTime
+  cancelAtPeriodEnd   Boolean            @default(false)
+  canceledAt          DateTime?
+  metadata            Json               @default("{}")
+  invoices            Invoice[]
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@index([userId])
+  @@index([planId])
+  @@index([status])
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  userId            String
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoiceId         String?
+  invoice           Invoice?      @relation(fields: [invoiceId], references: [id])
+  gatewayCode       String
+  externalId        String?
+  amount            Decimal
+  currency          String
+  status            PaymentStatus @default(PENDING)
+  failureReason     String?
+  rawResponse       Json          @default("{}")
+  paidAt            DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([invoiceId])
+  @@index([status])
+}
+
+model Invoice {
+  id             String        @id @default(cuid())
+  number         String        @unique
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscriptionId String?
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
+  subtotal       Decimal
+  discount       Decimal       @default(0)
+  tax            Decimal       @default(0)
+  total          Decimal
+  currency       String
+  status         InvoiceStatus @default(OPEN)
+  dueAt          DateTime?
+  paidAt         DateTime?
+  lineItems      InvoiceLineItem[]
+  payments       Payment[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([subscriptionId])
+  @@index([status])
+}
+
+model InvoiceLineItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Int      @default(1)
+  unitPrice   Decimal
+  total       Decimal
+  metadata    Json     @default("{}")
+}
+
+model Coupon {
+  id             String     @id @default(cuid())
+  code           String     @unique
+  type           CouponType
+  value          Decimal
+  currency       String?
+  maxRedemptions Int?
+  redeemedCount  Int        @default(0)
+  active         Boolean    @default(true)
+  startsAt       DateTime?
+  expiresAt      DateTime?
+  metadata       Json       @default("{}")
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+}
+
+model Referral {
+  id             String   @id @default(cuid())
+  ownerUserId    String
+  ownerUser      User     @relation("ReferralOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  referredUserId String?  @unique
+  referredUser   User?    @relation("ReferralReferredUser", fields: [referredUserId], references: [id], onDelete: SetNull)
+  code           String   @unique
+  rewardAmount   Decimal  @default(0)
+  currency       String   @default("USD")
+  rewardedAt     DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([ownerUserId])
+}
+
+model WebhookEvent {
+  id           String   @id @default(cuid())
+  gatewayCode  String
+  externalId   String?
+  eventType    String
+  signatureOk  Boolean  @default(false)
+  payload      Json
+  processedAt  DateTime?
+  errorMessage String?
+  createdAt    DateTime @default(now())
+
+  @@index([gatewayCode])
+  @@index([eventType])
+}
+
+model Currency {
+  code      String   @id
+  name      String
+  symbol    String
+  enabled   Boolean  @default(true)
+  decimals  Int      @default(2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TaxRule {
+  id         String   @id @default(cuid())
+  name       String
+  country    String?
+  rate       Decimal
+  enabled    Boolean  @default(false)
+  inclusive  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+
+enum MarketplaceStatus {
+  DRAFT
+  PUBLISHED
+  SUSPENDED
+}
+
+enum MarketplaceItemType {
+  ASSISTANT_TEMPLATE
+  PROMPT_PACK
+  WORKFLOW
+}
+
+model MarketplaceItem {
+  id             String                @id @default(cuid())
+  ownerUserId    String
+  ownerUser      User                  @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  type           MarketplaceItemType
+  status         MarketplaceStatus     @default(DRAFT)
+  slug           String                @unique
+  nameAr         String
+  nameEn         String
+  descriptionAr  String
+  descriptionEn  String
+  category       String
+  tags           String[]
+  price          Decimal               @default(0)
+  currency       String                @default("USD")
+  featured       Boolean               @default(false)
+  downloads      Int                   @default(0)
+  ratingAverage  Float                 @default(0)
+  ratingCount    Int                   @default(0)
+  sourceAssistantId String?
+  config         Json                  @default("{}")
+  reviews        MarketplaceReview[]
+  purchases      MarketplacePurchase[]
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@index([ownerUserId])
+  @@index([status])
+  @@index([category])
+}
+
+model MarketplaceReview {
+  id          String          @id @default(cuid())
+  itemId      String
+  item        MarketplaceItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  userId      String
+  rating      Int
+  comment     String?
+  createdAt   DateTime        @default(now())
+
+  @@unique([itemId, userId])
+  @@index([itemId])
+}
+
+model MarketplacePurchase {
+  id          String          @id @default(cuid())
+  itemId      String
+  item        MarketplaceItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  userId      String
+  amount      Decimal
+  currency    String
+  createdAt   DateTime        @default(now())
+
+  @@index([itemId])
+  @@index([userId])
+}
+
+model WhiteLabelProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  brandName         String
+  logoUrl           String?
+  faviconUrl        String?
+  primaryColor      String   @default("#6d4aff")
+  secondaryColor    String   @default("#17b890")
+  customDomain      String?
+  emailFromName     String?
+  emailFromAddress  String?
+  hideNexoraBrand   Boolean  @default(false)
+  customCss         String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model AssistantAnalyticsDaily {
+  id                String   @id @default(cuid())
+  assistantId       String
+  date              DateTime
+  conversations     Int      @default(0)
+  messages          Int      @default(0)
+  uniqueVisitors    Int      @default(0)
+  inputTokens       Int      @default(0)
+  outputTokens      Int      @default(0)
+  avgLatencyMs      Int      @default(0)
+  successfulAnswers Int      @default(0)
+  fallbackAnswers   Int      @default(0)
+  estimatedCost     Decimal  @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([assistantId, date])
+  @@index([assistantId])
+}
+
+model ApiUsageLog {
+  id           String   @id @default(cuid())
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  assistantId  String?
+  apiKeyPrefix String?
+  endpoint     String
+  method       String
+  statusCode   Int
+  latencyMs    Int
+  ipHash       String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([assistantId])
+  @@index([createdAt])
+}
+
+model VoiceProfile {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  nameAr      String
+  nameEn      String
+  provider    String
+  voiceId     String
+  gender      String?
+  ageGroup    String?
+  language    String
+  enabled     Boolean  @default(true)
+  config      Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+
+enum ConnectionKind {
+  AI
+  PAYMENT
+  EMAIL
+  STORAGE
+  VOICE
+  CACHE
+  CUSTOM
+}
+
+enum ConnectionStatus {
+  UNKNOWN
+  CONNECTED
+  FAILED
+  DISABLED
+}
+
+model ServiceConnection {
+  id                String           @id @default(cuid())
+  code              String           @unique
+  name              String
+  kind              ConnectionKind
+  enabled           Boolean          @default(false)
+  mode              String           @default("test")
+  configCipher      String?
+  publicSettings    Json             @default("{}")
+  status            ConnectionStatus @default(UNKNOWN)
+  lastTestedAt      DateTime?
+  lastError         String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([kind])
+  @@index([status])
+}
+
+model BackupJob {
+  id           String   @id @default(cuid())
+  type         String
+  status       String
+  location     String?
+  sizeBytes    BigInt?
+  startedAt    DateTime @default(now())
+  completedAt  DateTime?
+  errorMessage String?
+  metadata     Json     @default("{}")
+}
+
+model SystemHealthCheck {
+  id          String   @id @default(cuid())
+  component   String
+  status      String
+  latencyMs   Int?
+  message     String?
+  checkedAt   DateTime @default(now())
+
+  @@index([component])
+  @@index([checkedAt])
+}

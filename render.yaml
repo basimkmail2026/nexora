@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: nexora
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: npm install && npm run db:generate && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: APP_URL
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
