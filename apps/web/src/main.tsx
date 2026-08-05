@@ -26,7 +26,7 @@ const dictionary = {
     overview: "نظرة عامة", knowledge: "معرفة نكسورا", connections: "الاتصالات والذكاء",
     madeIn: "صُنعت وطُوِّرت في فلسطين", addKnowledge: "إضافة معرفة", save: "حفظ", title: "العنوان",
     content: "المحتوى", key: "المعرّف", category: "التصنيف", memory: "الذاكرة",
-    language: "اللغة", appearance: "المظهر", themeSystem: "حسب الجهاز", themeLight: "فاتح", themeDark: "داكن"
+    languageSetting: "اللغة", appearance: "المظهر", themeSystem: "حسب الجهاز", themeLight: "فاتح", themeDark: "داكن"
   },
   en: {
     dir: "ltr", language: "English", newChat: "New chat", chats: "Chats", assistants: "Assistants",
@@ -38,7 +38,7 @@ const dictionary = {
     copied: "Copied", thinking: "Thinking…", filesReady: "Files ready to send", overview: "Overview",
     knowledge: "Nexora knowledge", connections: "AI & connections", madeIn: "Created and developed in Palestine",
     addKnowledge: "Add knowledge", save: "Save", title: "Title", content: "Content", key: "Key",
-    category: "Category", memory: "Memory", language: "Language", appearance: "Appearance",
+    category: "Category", memory: "Memory", languageSetting: "Language", appearance: "Appearance",
     themeSystem: "System", themeLight: "Light", themeDark: "Dark"
   }
 } as const;
@@ -253,9 +253,15 @@ function App() {
   async function selectFiles(fileList: FileList | null) {
     if (!fileList?.length || !authenticated) return;
     setUploading(true);
-    try { setUploads(current => [...current, ...(await uploadFiles(Array.from(fileList)))]); }
-    catch (e: any) { alert(e.message); }
-    finally { setUploading(false); if (fileRef.current) fileRef.current.value = ""; }
+    try {
+      const uploaded = await uploadFiles(Array.from(fileList));
+      setUploads(current => [...current, ...uploaded]);
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
   }
 
   async function send() {
