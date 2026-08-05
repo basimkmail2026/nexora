@@ -3,8 +3,7 @@ services:
     name: nexora
     runtime: node
     plan: free
-    rootDir: .
-    buildCommand: npm install --include=dev && npm run db:generate && npm run build
+    rootDir: .buildCommand: npm install --include=dev && npm run db:generate && npm run db:migrate && npm run db:seed && npm run build
     startCommand: npm run start
     healthCheckPath: /api/health
     envVars:
