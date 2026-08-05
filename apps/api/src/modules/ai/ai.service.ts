@@ -8,7 +8,7 @@ export async function generateReply(messages: Array<{ role: string; content: str
   if (provider.type === "GEMINI") {
     const apiKey = env.GEMINI_API_KEY;
     if (!apiKey) throw new Error("مفتاح Gemini غير مضبوط");
-    const model = provider.defaultModel || env.GEMINI_MODEL;
+    const model = env.GEMINI_MODEL;
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
