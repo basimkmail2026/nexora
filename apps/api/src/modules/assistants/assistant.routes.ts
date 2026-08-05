@@ -221,7 +221,7 @@ assistantRouter.post("/:id/faqs", async (req: AuthRequest, res) => {
   }).parse(req.body);
 
   res.status(201).json(await prisma.faqItem.create({
-    data: { assistantId: assistant.id, ...body }
+    data: { assistantId: assistant.id, question: body.question, answer: body.answer }
   }));
 });
 

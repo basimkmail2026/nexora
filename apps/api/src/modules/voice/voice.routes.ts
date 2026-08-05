@@ -26,5 +26,5 @@ voiceRouter.post("/profiles", requireAuth, requireAdmin, async (_req: AuthReques
     config: z.record(z.any()).default({})
   }).parse(_req.body);
 
-  res.status(201).json(await prisma.voiceProfile.create({ data: body }));
+  res.status(201).json(await prisma.voiceProfile.create({ data: { code: body.code, nameAr: body.nameAr, nameEn: body.nameEn, provider: body.provider, voiceId: body.voiceId, gender: body.gender, ageGroup: body.ageGroup, language: body.language, enabled: body.enabled, config: body.config } }));
 });

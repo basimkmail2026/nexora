@@ -116,7 +116,7 @@ adminBillingRouter.put("/currencies/:code", async (req, res) => {
   res.json(await prisma.currency.upsert({
     where: { code: String(req.params.code).toUpperCase() },
     update: body,
-    create: { code: String(req.params.code).toUpperCase(), ...body }
+    create: { code: String(req.params.code).toUpperCase(), name: body.name, symbol: body.symbol, enabled: body.enabled, decimals: body.decimals }
   }));
 });
 
@@ -132,5 +132,5 @@ adminBillingRouter.post("/tax-rules", async (req, res) => {
     enabled: z.boolean().default(false),
     inclusive: z.boolean().default(false)
   }).parse(req.body);
-  res.status(201).json(await prisma.taxRule.create({ data: body }));
+  res.status(201).json(await prisma.taxRule.create({ data: { name: body.name, country: body.country, rate: body.rate, enabled: body.enabled, inclusive: body.inclusive } }));
 });

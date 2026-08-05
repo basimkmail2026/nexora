@@ -30,6 +30,6 @@ whiteLabelRouter.put("/", async (req: AuthRequest, res) => {
   res.json(await prisma.whiteLabelProfile.upsert({
     where: { userId: req.auth!.userId },
     update: body,
-    create: { userId: req.auth!.userId, ...body }
+    create: { userId: req.auth!.userId, brandName: body.brandName, logoUrl: body.logoUrl, faviconUrl: body.faviconUrl, primaryColor: body.primaryColor, secondaryColor: body.secondaryColor, customDomain: body.customDomain, emailFromName: body.emailFromName, emailFromAddress: body.emailFromAddress, hideNexoraBrand: body.hideNexoraBrand, customCss: body.customCss }
   }));
 });

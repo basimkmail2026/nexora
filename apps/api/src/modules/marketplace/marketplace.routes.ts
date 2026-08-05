@@ -81,7 +81,16 @@ marketplaceRouter.post("/", requireAuth, async (req: AuthRequest, res) => {
     data: {
       ownerUserId: req.auth!.userId,
       slug,
-      ...body
+      type: body.type,
+      nameAr: body.nameAr,
+      nameEn: body.nameEn,
+      descriptionAr: body.descriptionAr,
+      descriptionEn: body.descriptionEn,
+      category: body.category,
+      tags: body.tags,
+      price: body.price,
+      currency: body.currency,
+      sourceAssistantId: body.sourceAssistantId
     }
   });
 
@@ -147,7 +156,7 @@ marketplaceRouter.post("/:id/review", requireAuth, async (req: AuthRequest, res)
   const review = await prisma.marketplaceReview.upsert({
     where: { itemId_userId: { itemId: String(req.params.id), userId: req.auth!.userId } },
     update: body,
-    create: { itemId: String(req.params.id), userId: req.auth!.userId, ...body }
+    create: { itemId: String(req.params.id), userId: req.auth!.userId, rating: body.rating, comment: body.comment }
   });
 
   const stats = await prisma.marketplaceReview.aggregate({
