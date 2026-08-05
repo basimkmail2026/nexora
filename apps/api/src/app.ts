@@ -55,7 +55,7 @@ app.use("/api/admin/connections", connectionsRouter);
 app.use("/api/admin/system", systemRouter);
 
 if (env.NODE_ENV === "production") {
-  const webDist = path.resolve(__dirname, "../../../web/dist");
+  const webDist = path.resolve(__dirname, "../../web/dist");
   app.use(express.static(webDist));
   app.get("/{*splat}", (_req, res) => res.sendFile(path.join(webDist, "index.html")));
 }
