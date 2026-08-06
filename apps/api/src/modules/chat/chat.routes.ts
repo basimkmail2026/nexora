@@ -11,7 +11,10 @@ chatRouter.get("/conversations", requireAuth, async (req: AuthRequest, res) => {
   res.json(await prisma.conversation.findMany({
     where: { userId: req.auth!.userId },
     orderBy: { updatedAt: "desc" },
-    select: { id: true, title: true, createdAt: true, updatedAt: true }
+    select: {
+      id: true, title: true, createdAt: true, updatedAt: true,
+      _count: { select: { attachments: true, messages: true } }
+    }
   }));
 });
 

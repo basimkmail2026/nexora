@@ -18,7 +18,7 @@ rsync -a --delete \
 
 cd "$TARGET"
 git add -A
-git commit -m "Upgrade Nexora 2.2 website embed system" || true
+git commit -m "Upgrade Nexora 2.3 conversation experience" || true
 git push
 
 echo "Done. Render should deploy automatically."

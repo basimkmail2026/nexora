@@ -11,6 +11,7 @@ import Analytics from "./components/Analytics";
 type Role = "user" | "assistant";
 type Msg = { role: Role; content: string };
 type UploadItem = { id: string; name: string; mimeType: string; sizeBytes: number; status: string };
+type ConversationAttachment = { id: string; originalName: string; mimeType: string; sizeBytes: number; status: string };
 type View = "chat" | "assistants" | "billing" | "marketplace" | "analytics" | "settings" | "admin";
 type AdminTab = "overview" | "knowledge" | "connections";
 
@@ -229,6 +230,9 @@ function App() {
   const chatStreamRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [showJump, setShowJump] = useState(false);
+  const [conversationSearch, setConversationSearch] = useState("");
+  const [conversationAttachments, setConversationAttachments] = useState<ConversationAttachment[]>([]);
+  const [showConversationMedia, setShowConversationMedia] = useState(false);
 
   function setLocale(next: Locale) { setLocaleState(next); localStorage.setItem("nexoraLocale", next); }
   function setTheme(next: string) { setThemeState(next); localStorage.setItem("nexoraTheme", next); }
@@ -304,7 +308,38 @@ function App() {
 
   async function openConversation(id: string) {
     const data = await api(`/chat/conversations/${id}`);
-    setConversationId(id); setMessages(data.messages.map((m: any) => ({ role: m.role, content: m.content }))); setView("chat");
+    setConversationId(id);
+    setMessages(data.messages.map((m: any) => ({ role: m.role, content: m.content })));
+    setConversationAttachments(data.attachments || []);
+    setShowConversationMedia(false);
+    setView("chat");
+  }
+
+  async function deleteConversation(id: string) {
+    const label = locale === "ar" ? "حذف هذه المحادثة نهائيًا؟" : "Delete this conversation permanently?";
+    if (!confirm(label)) return;
+    await api(`/chat/conversations/${id}`, { method: "DELETE" });
+    setConversations(list => list.filter(item => item.id !== id));
+    if (conversationId === id) {
+      setConversationId(undefined);
+      setMessages([]);
+      setConversationAttachments([]);
+      setShowConversationMedia(false);
+    }
+  }
+
+  async function openAttachment(item: ConversationAttachment) {
+    const token = localStorage.getItem("accessToken");
+    const response = await fetch(`/api/uploads/${item.id}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      alert(data.error || "تعذر فتح الملف");
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank", "noopener,noreferrer");
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 
   async function logout() {
@@ -322,7 +357,7 @@ function App() {
   return <div className="appShell">
     <aside className="userSidebar">
       <div className="brand"><div className="brandMark tiny">N</div><div><b>Nexora</b><small>{t.madeIn}</small></div></div>
-      <button className="newChat" onClick={() => { setConversationId(undefined); setMessages([]); setView("chat"); }}>＋ {t.newChat}</button>
+      <button className="newChat" onClick={() => { setConversationId(undefined); setMessages([]); setConversationAttachments([]); setShowConversationMedia(false); setView("chat"); }}>＋ {t.newChat}</button>
       <nav>
         <button className={view === "chat" ? "active" : ""} onClick={() => setView("chat")}>◉ {t.chats}</button>
         {authenticated && <>
@@ -334,8 +369,17 @@ function App() {
           {me && ["ADMIN", "SUPER_ADMIN"].includes(me.role) && <button onClick={() => setView("admin")}>▦ {t.admin}</button>}
         </>}
       </nav>
-      <div className="historyLabel">{t.chats}</div>
-      <div className="conversationList">{conversations.map(item => <button key={item.id} onClick={() => openConversation(item.id)} className={conversationId === item.id ? "selected" : ""}>{item.title}</button>)}</div>
+      <div className="historyHeader"><span>{t.chats}</span><b>{conversations.length}</b></div>
+      <div className="sidebarSearch"><span>⌕</span><input value={conversationSearch} onChange={e => setConversationSearch(e.target.value)} placeholder={locale === "ar" ? "بحث في المحادثات" : "Search chats"} /></div>
+      <div className="conversationList">
+        {conversations.filter(item => String(item.title || "").toLowerCase().includes(conversationSearch.toLowerCase())).map(item => <div key={item.id} className={`conversationRow ${conversationId === item.id ? "selected" : ""}`}>
+          <button className="conversationOpen" onClick={() => openConversation(item.id)}>
+            <span className="conversationIcon">{item._count?.attachments ? "▧" : "◌"}</span>
+            <span className="conversationText"><b>{item.title}</b><small>{item._count?.messages || 0} {locale === "ar" ? "رسالة" : "messages"}{item._count?.attachments ? ` · ${item._count.attachments} ${locale === "ar" ? "ملف" : "files"}` : ""}</small></span>
+          </button>
+          <button className="conversationDelete" onClick={() => deleteConversation(item.id)} title={locale === "ar" ? "حذف المحادثة" : "Delete chat"}>×</button>
+        </div>)}
+      </div>
       <div className="sidebarBottom">
         <button onClick={() => setLocale(locale === "ar" ? "en" : "ar")}>◎ {t.languageSetting}</button>
         {authenticated ? <button onClick={logout}>↪ {t.logout}</button> : <button onClick={() => location.reload()}>{t.login}</button>}
@@ -344,12 +388,15 @@ function App() {
 
     <section className="workspace">
       {view === "settings" ? <UserSettings t={t} locale={locale} setLocale={setLocale} theme={theme} setTheme={setTheme} /> : <>
-        <header className="workspaceHead"><div><span className="statusDot" /> Nexora AI</div><span className="modelPill">Multimodal workspace</span></header>
+        <header className="workspaceHead"><div><span className="statusDot" /> Nexora AI</div><div className="workspaceActions">{conversationId && <button className="mediaButton" onClick={() => setShowConversationMedia(v => !v)}>▧ {locale === "ar" ? "وسائط المحادثة" : "Chat media"}{conversationAttachments.length ? ` (${conversationAttachments.length})` : ""}</button>}<span className="modelPill">Multimodal workspace</span></div></header>
+        <div className="chatBody">
         <div className="chatStream" ref={chatStreamRef} onScroll={handleChatScroll}>
           {!messages.length && <div className="welcomeState"><div className="welcomeIcon">✦</div><h1>{t.welcome}</h1><p>{t.welcomeSub}</p><div className="suggestionGrid"><button onClick={() => setInput(locale === "ar" ? "ما هي باقات نكسورا؟" : "What are Nexora's plans?")}>◫ Plans</button><button onClick={() => fileRef.current?.click()}>⌁ Analyze a file</button><button onClick={() => setInput(locale === "ar" ? "أين صُنعت نكسورا؟" : "Where was Nexora created?")}>◇ About Nexora</button></div></div>}
           {messages.map((message, index) => <article key={index} className={`chatMessage ${message.role}`}><div className="avatar">{message.role === "assistant" ? "N" : (me?.displayName?.[0] || "U")}</div><div className="bubble"><MessageBody content={message.content} t={t} />{message.role === "assistant" && <button className="messageCopy" onClick={() => navigator.clipboard.writeText(message.content)}>⌘ {t.copy}</button>}</div></article>)}
           {busy && <article className="chatMessage assistant"><div className="avatar">N</div><div className="bubble typing"><span /><span /><span /> {t.thinking}</div></article>}
           <div ref={chatEndRef} className="chatEndAnchor" />
+        </div>
+        {showConversationMedia && <aside className="conversationMediaPanel"><div className="mediaPanelHead"><div><b>{locale === "ar" ? "وسائط وملفات المحادثة" : "Chat media & files"}</b><small>{conversationAttachments.length} {locale === "ar" ? "عنصر" : "items"}</small></div><button onClick={() => setShowConversationMedia(false)}>×</button></div>{!conversationAttachments.length ? <div className="mediaEmpty">{locale === "ar" ? "لا توجد وسائط في هذه المحادثة." : "No media in this chat."}</div> : <div className="mediaGrid">{conversationAttachments.map(item => <button key={item.id} className="mediaItem" onClick={() => openAttachment(item)}><span>{item.mimeType.startsWith("image/") ? "▧" : item.mimeType.startsWith("video/") ? "▶" : item.mimeType.startsWith("audio/") ? "♪" : "▤"}</span><b>{item.originalName}</b><small>{Math.max(1, Math.round(item.sizeBytes / 1024))} KB · {item.mimeType}</small></button>)}</div>}</aside>}
         </div>
         {showJump && <button className="jumpLatest" onClick={() => jumpToLatest()}>↓ {locale === "ar" ? "آخر رسالة" : "Latest"}</button>}
         <div className="composerDock">

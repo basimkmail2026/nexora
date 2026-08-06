@@ -1,0 +1,1 @@
+{"root":["./src/main.tsx","./src/vite-env.d.ts","./src/components/AdminBilling.tsx","./src/components/Analytics.tsx","./src/components/AssistantBuilder.tsx","./src/components/Billing.tsx","./src/components/Marketplace.tsx","./src/components/SystemAdmin.tsx","./src/components/WhiteLabel.tsx","./src/lib/api.ts"],"errors":true,"version":"5.8.3"}
