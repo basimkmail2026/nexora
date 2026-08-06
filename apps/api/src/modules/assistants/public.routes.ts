@@ -391,12 +391,21 @@ publicAssistantRouter.post("/widget/:publicKey/handoff", async (req, res) => {
 
 async function loadWidgetSession(req: any, publicKey: string, sessionKey: string) {
   const validated = await validateWidgetRequest(req, publicKey);
-  if ("error" in validated) return validated;
+  if ("error" in validated) {
+    return { error: validated.error } as const;
+  }
+
   const conversation = await prisma.assistantConversation.findFirst({
     where: { assistantId: validated.widget.assistant.id, sessionKey },
     include: { messages: { orderBy: { createdAt: "asc" }, take: 300 } }
   });
-  if (!conversation) return { error: { status: 404, message: "جلسة المحادثة غير موجودة" } } as const;
+
+  if (!conversation) {
+    return {
+      error: { status: 404, message: "جلسة المحادثة غير موجودة" }
+    } as const;
+  }
+
   return { conversation } as const;
 }
 
