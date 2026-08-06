@@ -217,3 +217,44 @@ body.dark .authVisual { background:radial-gradient(circle at 50% 35%,#30275e 0,#
 /* Nexora assistant onboarding */
 .onboardingShell{min-height:100dvh;display:grid;grid-template-columns:minmax(280px,40%) 1fr;background:var(--bg);color:var(--text)}
 .onboardingIntro{padding:clamp(32px,6vw,90px);display:flex;flex-direction:column;justify-content:center;background:radial-gradient(circle at 50% 25%,rgba(128,109,255,.28),transparent 42%),#0b0e15;color:#fff}.onboardingIntro span{font-size:12px;letter-spacing:.16em;color:#b8afff}.onboardingIntro h1{font-size:clamp(34px,5vw,72px);line-height:1.05;margin:18px 0}.onboardingIntro p{max-width:560px;color:#b6c0d1;line-height:1.9}.onboardingChat{padding:clamp(22px,5vw,70px);overflow:auto;display:flex;flex-direction:column;gap:14px;justify-content:center}.onboardingChat.live{justify-content:stretch;max-height:100dvh}.onboardingMessages{flex:1;overflow:auto;display:flex;flex-direction:column;gap:12px;padding-block:10px}.onboardingBubble{max-width:min(78%,680px);padding:14px 17px;border-radius:18px;line-height:1.75;white-space:pre-wrap;background:var(--panel);border:1px solid var(--line)}.onboardingBubble.user{align-self:flex-start;background:linear-gradient(135deg,var(--accent),#9b8bff);color:#fff;border:0}.onboardingBubble.support{align-self:flex-end;border-color:#6f5cff;background:color-mix(in srgb,var(--accent) 10%,var(--panel))}.onboardingBubble small{display:block;font-size:11px;opacity:.65;margin-bottom:4px}.onboardingComposer{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.onboardingComposer textarea{min-height:72px}.onboardingComposer button,.onboardingReview button,.activationPanel button{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:0;padding:13px 22px;border-radius:12px;font-weight:800}.onboardingReview{display:grid;gap:16px;padding:20px;border:1px solid var(--line);border-radius:18px;background:var(--panel)}.onboardingReview label{display:grid;gap:8px}.onboardingStatus{display:inline-flex;width:max-content;padding:7px 12px;border-radius:999px;background:rgba(128,109,255,.18);border:1px solid rgba(128,109,255,.4)}.embedReady{padding:16px;border:1px solid #46c37b;border-radius:16px;background:rgba(70,195,123,.08)}.embedReady pre{white-space:pre-wrap;overflow:auto}.onboardingAdmin{height:100%;min-height:0;display:grid;grid-template-columns:320px 1fr}.onboardingQueue{overflow:auto;border-inline-end:1px solid var(--line);padding:18px}.onboardingQueue>button{width:100%;display:grid;text-align:start;gap:5px;padding:13px;margin-bottom:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px}.onboardingQueue>button.active{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--panel))}.onboardingQueue span,.onboardingQueue small{color:var(--muted)}.onboardingCase{min-width:0;overflow:auto;padding:24px}.caseDetails{display:grid;gap:10px;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--panel)}.caseMessages{display:flex;flex-direction:column;gap:10px;margin:18px 0}.caseMessage{padding:12px 15px;border-radius:14px;border:1px solid var(--line);background:var(--panel);max-width:80%}.caseMessage.customer{align-self:flex-start}.caseMessage.support{align-self:flex-end;border-color:var(--accent)}.activationPanel{margin-top:18px;display:grid;gap:10px;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--panel)}.activationPanel textarea{min-height:110px}@media(max-width:850px){.onboardingShell{grid-template-columns:1fr}.onboardingIntro{padding:28px;min-height:280px}.onboardingChat.live{max-height:none;min-height:70dvh}.onboardingAdmin{grid-template-columns:1fr}.onboardingQueue{max-height:280px;border-inline-end:0;border-bottom:1px solid var(--line)}}
+
+/* Fix scrolling for assistant onboarding pages */
+body:has(.onboardingShell) {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  height: auto !important;
+}
+
+.onboardingShell {
+  height: auto !important;
+  min-height: 100dvh !important;
+  overflow: visible !important;
+}
+
+.onboardingChat {
+  min-height: 0;
+  overflow-y: visible !important;
+  padding-bottom: 100px !important;
+}
+
+@media (max-width: 850px) {
+  body:has(.onboardingShell) {
+    overflow-y: auto !important;
+    position: static !important;
+  }
+
+  .onboardingShell {
+    display: block !important;
+  }
+
+  .onboardingIntro {
+    min-height: auto !important;
+  }
+
+  .onboardingChat,
+  .onboardingChat.live {
+    max-height: none !important;
+    height: auto !important;
+    overflow-y: visible !important;
+  }
+}
