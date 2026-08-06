@@ -145,8 +145,17 @@ publicAssistantRouter.post("/:assistantId/chat", async (req, res) => {
 
 publicAssistantRouter.get("/widget/:publicKey/config", async (req, res) => {
   const widget = await resolveWidget(String(req.params.publicKey));
-  if (!widget?.enabled || widget.assistant.status !== "PUBLISHED") {
-    return res.status(404).json({ error: "الودجت غير متاح" });
+  if (!widget) {
+    console.warn("Nexora widget config: public key not found", { publicKey: String(req.params.publicKey) });
+    return res.status(404).json({ error: "مفتاح الودجت غير صالح" });
+  }
+  if (!widget.enabled) {
+    console.warn("Nexora widget config: widget disabled", { assistantId: widget.assistantId });
+    return res.status(403).json({ error: "الودجت متوقف من لوحة التحكم" });
+  }
+  if (widget.assistant.status === "ARCHIVED") {
+    console.warn("Nexora widget config: assistant archived", { assistantId: widget.assistantId });
+    return res.status(403).json({ error: "المساعد مؤرشف" });
   }
 
   const domain = requestDomain(req);
@@ -184,8 +193,17 @@ publicAssistantRouter.post("/widget/:publicKey/chat", async (req, res) => {
   }).parse(req.body);
 
   const widget = await resolveWidget(String(req.params.publicKey));
-  if (!widget?.enabled || widget.assistant.status !== "PUBLISHED") {
-    return res.status(404).json({ error: "الودجت غير متاح" });
+  if (!widget) {
+    console.warn("Nexora widget chat: public key not found", { publicKey: String(req.params.publicKey) });
+    return res.status(404).json({ error: "مفتاح الودجت غير صالح" });
+  }
+  if (!widget.enabled) {
+    console.warn("Nexora widget chat: widget disabled", { assistantId: widget.assistantId });
+    return res.status(403).json({ error: "الودجت متوقف من لوحة التحكم" });
+  }
+  if (widget.assistant.status === "ARCHIVED") {
+    console.warn("Nexora widget chat: assistant archived", { assistantId: widget.assistantId });
+    return res.status(403).json({ error: "المساعد مؤرشف" });
   }
 
   const domain = requestDomain(req);

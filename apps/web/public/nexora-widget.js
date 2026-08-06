@@ -62,7 +62,9 @@
       .nx-send:disabled,.nx-mic:disabled { opacity:.5; cursor:not-allowed; }
       .nx-brand { text-align:center; padding:5px 10px 8px; color:var(--nx-muted); font-size:11px; background:var(--nx-bg); }
       .nx-brand.hidden { display:none; }
-      .nx-error { color:#b42318; }
+      .nx-error { color:#b42318; background:#fff0f1!important; border-color:#ffc7cd!important; }
+      .nx-root.dark .nx-error { color:#ff9aa6; background:#32161d!important; border-color:#6f2a37!important; }
+      .nx-retry { margin-top:9px; border:1px solid var(--nx-border); background:var(--nx-bg); color:var(--nx-text); border-radius:9px; padding:7px 10px; cursor:pointer; font:inherit; }
       @media (max-width:520px) {
         .nx-root,.nx-root.left { left:10px; right:10px; bottom:10px; }
         .nx-launcher { margin-inline-start:auto; }
@@ -169,9 +171,21 @@
       }
       bubble(data.welcomeMessage || "مرحبًا! كيف أقدر أساعدك؟", false);
     } catch (error) {
-      bubble(error.message || "تعذر تحميل المساعد", false, "nx-error");
+      const row = bubble(error.message || "تعذر تحميل المساعد", false, "nx-error");
+      const retry = document.createElement("button");
+      retry.type = "button";
+      retry.className = "nx-retry";
+      retry.textContent = "إعادة المحاولة";
+      retry.addEventListener("click", () => {
+        row.remove();
+        input.disabled = false;
+        $(".nx-send").disabled = false;
+        loadConfig();
+      });
+      row.querySelector(".nx-bubble")?.appendChild(retry);
       input.disabled = true;
       $(".nx-send").disabled = true;
+      console.error("Nexora Widget config failed", error);
     }
   }
 

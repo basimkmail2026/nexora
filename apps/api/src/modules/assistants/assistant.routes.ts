@@ -287,11 +287,24 @@ assistantRouter.put("/:id/widget", async (req: AuthRequest, res) => {
     allowedDomains: z.array(z.string().max(255)).max(100).optional()
   }).parse(req.body);
 
-  res.json(await prisma.assistantWidget.upsert({
-    where: { assistantId: assistant.id },
-    update: body,
-    create: { assistantId: assistant.id, ...body }
-  }));
+  const widget = await prisma.$transaction(async tx => {
+    const saved = await tx.assistantWidget.upsert({
+      where: { assistantId: assistant.id },
+      update: body,
+      create: { assistantId: assistant.id, ...body }
+    });
+
+    if (body.enabled !== false && assistant.status === "DRAFT") {
+      await tx.assistant.update({
+        where: { id: assistant.id },
+        data: { status: "PUBLISHED", publishedAt: assistant.publishedAt || new Date() }
+      });
+    }
+
+    return saved;
+  });
+
+  res.json(widget);
 });
 
 assistantRouter.post("/:id/widget/regenerate-key", async (req: AuthRequest, res) => {
