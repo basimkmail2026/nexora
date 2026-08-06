@@ -356,9 +356,15 @@ model AssistantConversation {
   visitorName   String?
   visitorEmail  String?
   userAgent     String?
-  status        String    @default("OPEN")
-  lastMessageAt DateTime  @default(now())
-  messages      AssistantMessage[]
+  status              String    @default("OPEN")
+  handoffStatus       String    @default("AI")
+  assignedToId        String?
+  agentDisplayName    String?
+  handoffRequestedAt  DateTime?
+  handoffClaimedAt    DateTime?
+  handoffResolvedAt   DateTime?
+  lastMessageAt       DateTime  @default(now())
+  messages            AssistantMessage[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

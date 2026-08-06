@@ -14,6 +14,9 @@
   let sessionKey = localStorage.getItem(`${storagePrefix}_session`) || "";
   let config = null;
   let busy = false;
+  let handoffStatus = "AI";
+  let pollTimer = null;
+  const seenServerMessages = new Set();
 
   const host = document.createElement("div");
   host.id = `nexora-widget-${publicKey}`;
@@ -60,6 +63,13 @@
       .nx-send { background:var(--nx-primary); color:#fff; padding:0 13px; font-weight:700; }
       .nx-mic { background:var(--nx-panel); color:var(--nx-text); }
       .nx-send:disabled,.nx-mic:disabled { opacity:.5; cursor:not-allowed; }
+      .nx-handoff { border:1px solid var(--nx-border); background:var(--nx-bg); color:var(--nx-text); border-radius:11px; padding:9px 12px; cursor:pointer; font:inherit; font-weight:700; white-space:nowrap; }
+      .nx-handoff.active { background:#fff7e6; color:#8a5200; border-color:#f1c36d; }
+      .nx-root.dark .nx-handoff.active { background:#302511; color:#ffd48a; border-color:#715520; }
+      .nx-row.system { justify-content:center; }
+      .nx-row.system .nx-bubble { max-width:94%; background:transparent; border:0; color:var(--nx-muted); font-size:12px; text-align:center; }
+      .nx-row.agent { justify-content:flex-end; }
+      .nx-row.agent .nx-bubble { background:var(--nx-bg); color:var(--nx-text); border:1px solid var(--nx-primary); border-bottom-left-radius:5px; }
       .nx-brand { text-align:center; padding:5px 10px 8px; color:var(--nx-muted); font-size:11px; background:var(--nx-bg); }
       .nx-brand.hidden { display:none; }
       .nx-error { color:#b42318; background:#fff0f1!important; border-color:#ffc7cd!important; }
@@ -88,6 +98,7 @@
         </section>
         <div class="nx-messages" aria-live="polite"></div>
         <form class="nx-form">
+          <button class="nx-handoff" type="button" title="التحدث مع موظف">موظف</button>
           <button class="nx-mic" type="button" title="إملاء صوتي">🎙️</button>
           <textarea class="nx-input" rows="1" placeholder="اكتب رسالتك..."></textarea>
           <button class="nx-send" type="submit">إرسال</button>
@@ -110,9 +121,9 @@
     root.classList.toggle("dark", dark);
   }
 
-  function bubble(text, mine, extraClass = "") {
+  function bubble(text, mine, extraClass = "", role = "") {
     const row = document.createElement("div");
-    row.className = `nx-row ${mine ? "mine" : "bot"}`;
+    row.className = `nx-row ${role || (mine ? "mine" : "bot")}`;
     const item = document.createElement("div");
     item.className = `nx-bubble ${extraClass}`;
     item.textContent = text;
@@ -134,6 +145,8 @@
 
   function openWidget() {
     box.classList.add("open");
+    ensurePolling();
+    pollSession();
     $(".nx-launcher").style.display = "none";
     setTimeout(() => input.focus(), 100);
   }
@@ -145,9 +158,88 @@
 
   function resetConversation() {
     sessionKey = "";
+    handoffStatus = "AI";
+    seenServerMessages.clear();
+    clearInterval(pollTimer);
+    pollTimer = null;
+    updateHandoffUi();
     localStorage.removeItem(`${storagePrefix}_session`);
     messages.innerHTML = "";
     if (config?.welcomeMessage) bubble(config.welcomeMessage, false);
+  }
+
+
+  function updateHandoffUi() {
+    const button = $(".nx-handoff");
+    const status = $(".nx-status");
+    button.classList.toggle("active", handoffStatus !== "AI");
+    if (handoffStatus === "WAITING") {
+      button.textContent = "بانتظار موظف";
+      status.textContent = "بانتظار أحد الموظفين";
+    } else if (handoffStatus === "AGENT") {
+      button.textContent = "موظف متصل";
+      status.textContent = "موظف الدعم متصل";
+    } else {
+      button.textContent = "موظف";
+      status.textContent = "متصل الآن";
+    }
+  }
+
+  function renderServerMessage(message) {
+    if (!message?.id || seenServerMessages.has(message.id)) return;
+    seenServerMessages.add(message.id);
+    if (message.role === "user") return;
+    if (message.role === "system") bubble(message.content, false, "", "system");
+    else if (message.role === "agent") bubble(message.content, false, "", "agent");
+  }
+
+  async function pollSession() {
+    if (!sessionKey || !box.classList.contains("open")) return;
+    try {
+      const response = await fetch(`${apiBase}/api/public/assistants/widget/${encodeURIComponent(publicKey)}/session/${encodeURIComponent(sessionKey)}?pageUrl=${encodeURIComponent(location.href)}`);
+      const data = await response.json();
+      if (!response.ok) return;
+      handoffStatus = data.handoffStatus || "AI";
+      updateHandoffUi();
+      (data.messages || []).forEach(renderServerMessage);
+    } catch (error) {
+      console.warn("Nexora Widget polling failed", error);
+    }
+  }
+
+  function ensurePolling() {
+    if (pollTimer) return;
+    pollTimer = setInterval(pollSession, 3500);
+  }
+
+  async function requestHandoff() {
+    if (busy || handoffStatus !== "AI") return;
+    busy = true;
+    try {
+      const response = await fetch(`${apiBase}/api/public/assistants/widget/${encodeURIComponent(publicKey)}/handoff`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionKey: sessionKey || undefined,
+          visitorId,
+          visitorName: visitorName.value.trim() || undefined,
+          visitorEmail: visitorEmail.value.trim() || undefined,
+          pageUrl: location.href
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "تعذر تحويل المحادثة");
+      sessionKey = data.sessionKey;
+      localStorage.setItem(`${storagePrefix}_session`, sessionKey);
+      handoffStatus = data.handoffStatus || "WAITING";
+      updateHandoffUi();
+      bubble(data.message || "تم تحويل المحادثة إلى موظف.", false, "", "system");
+      ensurePolling();
+    } catch (error) {
+      bubble(error.message || "تعذر تحويل المحادثة", false, "nx-error");
+    } finally {
+      busy = false;
+    }
   }
 
   async function loadConfig() {
@@ -216,7 +308,10 @@
       typing(false);
       sessionKey = data.sessionKey;
       localStorage.setItem(`${storagePrefix}_session`, sessionKey);
-      bubble(data.reply, false);
+      handoffStatus = data.mode || handoffStatus;
+      updateHandoffUi();
+      if (data.reply) bubble(data.reply, false);
+      ensurePolling();
     } catch (error) {
       typing(false);
       bubble(error.message || "تعذر الاتصال", false, "nx-error");
@@ -228,6 +323,7 @@
   }
 
   $(".nx-launcher").addEventListener("click", openWidget);
+  $(".nx-handoff").addEventListener("click", requestHandoff);
   $(".nx-close").addEventListener("click", closeWidget);
   $(".nx-reset").addEventListener("click", resetConversation);
   $(".nx-start").addEventListener("click", () => {
@@ -262,5 +358,7 @@
     recognition.start();
   });
 
+  updateHandoffUi();
   loadConfig();
+  if (sessionKey) ensurePolling();
 })();

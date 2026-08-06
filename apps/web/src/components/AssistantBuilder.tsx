@@ -19,6 +19,7 @@ export default function AssistantBuilder({ onClose }: { onClose: () => void }) {
   const [apiKey, setApiKey] = useState("");
   const [conversations, setConversations] = useState<any[]>([]);
   const [conversation, setConversation] = useState<any>(null);
+  const [agentReply, setAgentReply] = useState("");
   const [saving, setSaving] = useState(false);
 
   async function load() {
@@ -146,6 +147,37 @@ export default function AssistantBuilder({ onClose }: { onClose: () => void }) {
     if (selected && tab === "conversations") loadConversations();
   }, [selected?.id, tab]);
 
+  useEffect(() => {
+    if (!selected || tab !== "conversations" || !conversation?.id) return;
+    const timer = window.setInterval(() => openConversation(conversation.id).catch(() => {}), 4000);
+    return () => window.clearInterval(timer);
+  }, [selected?.id, tab, conversation?.id]);
+
+  async function claimConversation() {
+    const updated = await api(`/assistants/${selected.id}/conversations/${conversation.id}/claim`, { method: "POST" });
+    setConversation({ ...conversation, ...updated });
+    await openConversation(conversation.id);
+    await loadConversations();
+  }
+
+  async function sendAgentReply() {
+    if (!agentReply.trim()) return;
+    await api(`/assistants/${selected.id}/conversations/${conversation.id}/reply`, {
+      method: "POST",
+      body: JSON.stringify({ message: agentReply.trim() })
+    });
+    setAgentReply("");
+    await openConversation(conversation.id);
+    await loadConversations();
+  }
+
+  async function returnConversationToAi() {
+    const updated = await api(`/assistants/${selected.id}/conversations/${conversation.id}/return-ai`, { method: "POST" });
+    setConversation({ ...conversation, ...updated });
+    await openConversation(conversation.id);
+    await loadConversations();
+  }
+
   const embedCode = useMemo(() => {
     const key = selected?.widget?.publicKey;
     if (!key) return "";
@@ -236,8 +268,8 @@ export default function AssistantBuilder({ onClose }: { onClose: () => void }) {
     </div>}
 
     {tab === "conversations" && <div className="conversationAdminLayout">
-      <div className="card conversationList"><div className="sectionHead"><h2>محادثات الزوار</h2><button className="secondary" onClick={loadConversations}>تحديث</button></div>{conversations.length === 0 && <p>لا توجد محادثات بعد.</p>}{conversations.map(item => <button key={item.id} className={conversation?.id === item.id ? "conversationItem active" : "conversationItem"} onClick={() => openConversation(item.id)}><b>{item.visitorName || item.visitorEmail || "زائر"}</b><span>{item.sourceDomain || item.source}</span><small>{item.messages?.[0]?.content || "بدون رسائل"}</small></button>)}</div>
-      <div className="card conversationDetail"><h2>تفاصيل المحادثة</h2>{!conversation ? <p>اختر محادثة من القائمة.</p> : <><div className="visitorMeta"><span>الاسم: {conversation.visitorName || "—"}</span><span>البريد: {conversation.visitorEmail || "—"}</span><span>الموقع: {conversation.sourceDomain || "—"}</span><span>الصفحة: {conversation.pageUrl || "—"}</span></div><div className="conversationMessages">{conversation.messages.map((message: any) => <div key={message.id} className={`adminMessage ${message.role === "user" ? "user" : "assistant"}`}><b>{message.role === "user" ? "الزائر" : selected.name}</b><p>{message.content}</p></div>)}</div><select value={conversation.status} onChange={async e => { const updated = await api(`/assistants/${selected.id}/conversations/${conversation.id}`, { method: "PATCH", body: JSON.stringify({ status: e.target.value }) }); setConversation({ ...conversation, status: updated.status }); }}><option value="OPEN">مفتوحة</option><option value="RESOLVED">تم الحل</option><option value="ARCHIVED">مؤرشفة</option></select></>}</div>
+      <div className="card conversationList"><div className="sectionHead"><h2>محادثات الزوار</h2><button className="secondary" onClick={loadConversations}>تحديث</button></div>{conversations.length === 0 && <p>لا توجد محادثات بعد.</p>}{conversations.map(item => <button key={item.id} className={conversation?.id === item.id ? "conversationItem active" : "conversationItem"} onClick={() => openConversation(item.id)}><div className="conversationItemTitle"><b>{item.visitorName || item.visitorEmail || "زائر"}</b><span className={`handoffBadge ${String(item.handoffStatus || "AI").toLowerCase()}`}>{item.handoffStatus === "WAITING" ? "بانتظار موظف" : item.handoffStatus === "AGENT" ? "مع موظف" : "AI"}</span></div><span>{item.sourceDomain || item.source}</span><small>{item.messages?.[0]?.content || "بدون رسائل"}</small></button>)}</div>
+      <div className="card conversationDetail"><h2>تفاصيل المحادثة</h2>{!conversation ? <p>اختر محادثة من القائمة.</p> : <><div className="visitorMeta"><span>الاسم: {conversation.visitorName || "—"}</span><span>البريد: {conversation.visitorEmail || "—"}</span><span>الموقع: {conversation.sourceDomain || "—"}</span><span>الصفحة: {conversation.pageUrl || "—"}</span></div><div className="handoffToolbar"><div><b>وضع المحادثة</b><span className={`handoffBadge ${String(conversation.handoffStatus || "AI").toLowerCase()}`}>{conversation.handoffStatus === "WAITING" ? "بانتظار موظف" : conversation.handoffStatus === "AGENT" ? `يتولاها ${conversation.agentDisplayName || "موظف"}` : "المساعد الذكي"}</span></div><div className="buttonRow">{conversation.handoffStatus === "WAITING" && <button onClick={claimConversation}>استلام المحادثة</button>}{conversation.handoffStatus === "AGENT" && <button className="secondary" onClick={returnConversationToAi}>إرجاع إلى المساعد</button>}</div></div><div className="conversationMessages">{conversation.messages.map((message: any) => <div key={message.id} className={`adminMessage ${message.role}`}><b>{message.role === "user" ? "الزائر" : message.role === "agent" ? (conversation.agentDisplayName || "الموظف") : message.role === "system" ? "النظام" : selected.name}</b><p>{message.content}</p></div>)}</div>{conversation.handoffStatus === "AGENT" && <div className="agentComposer"><textarea rows={3} value={agentReply} onChange={e => setAgentReply(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAgentReply(); } }} placeholder="اكتب رد الموظف..." /><button onClick={sendAgentReply}>إرسال للزائر</button></div>}<select value={conversation.status} onChange={async e => { const updated = await api(`/assistants/${selected.id}/conversations/${conversation.id}`, { method: "PATCH", body: JSON.stringify({ status: e.target.value }) }); setConversation({ ...conversation, status: updated.status }); }}><option value="OPEN">مفتوحة</option><option value="RESOLVED">تم الحل</option><option value="ARCHIVED">مؤرشفة</option></select></>}</div>
     </div>}
   </div>;
 }

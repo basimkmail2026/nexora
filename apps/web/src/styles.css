@@ -196,3 +196,20 @@ body.dark .workspaceHead,
 body.dark .assistantTabs { backdrop-filter:blur(18px); }
 body.dark .adminHero { background:linear-gradient(135deg,#151a28,#0d1018); border:1px solid #2d3650; }
 body.dark .authVisual { background:radial-gradient(circle at 50% 35%,#30275e 0,#121521 38%,#090b10 75%); }
+
+/* Nexora 3.0 — Human handoff and support inbox */
+.conversationItemTitle { display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%; }
+.handoffBadge { display:inline-flex; align-items:center; border-radius:999px; padding:4px 9px; font-size:11px; font-weight:800; border:1px solid var(--border); background:var(--panel-soft); color:var(--muted); white-space:nowrap; }
+.handoffBadge.waiting { background:#fff5dc; border-color:#e9bd58; color:#7a4a00; }
+.handoffBadge.agent { background:#e9f8ef; border-color:#70c993; color:#126636; }
+.handoffBadge.ai { background:var(--accent-soft); border-color:color-mix(in srgb, var(--accent) 38%, var(--border)); color:var(--accent); }
+.handoffToolbar { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; padding:12px 14px; margin:12px 0; border:1px solid var(--border); border-radius:14px; background:var(--panel-soft); }
+.handoffToolbar > div:first-child { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.adminMessage.agent { border-inline-start:3px solid #38a169; background:color-mix(in srgb, #38a169 8%, var(--card)); }
+.adminMessage.system { text-align:center; border:0; background:transparent; color:var(--muted); font-size:13px; }
+.adminMessage.system b { display:none; }
+.agentComposer { display:grid; grid-template-columns:1fr auto; gap:10px; align-items:end; margin-top:14px; padding:12px; border:1px solid var(--border); border-radius:14px; background:var(--card); }
+.agentComposer textarea { min-height:80px; }
+@media (max-width:720px) { .agentComposer { grid-template-columns:1fr; } }
+[data-theme="dark"] .handoffBadge.waiting, .dark .handoffBadge.waiting { background:#33260f; border-color:#76561d; color:#ffd686; }
+[data-theme="dark"] .handoffBadge.agent, .dark .handoffBadge.agent { background:#102a1c; border-color:#2f7650; color:#9be7b8; }

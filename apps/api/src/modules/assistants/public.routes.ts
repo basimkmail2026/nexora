@@ -83,6 +83,19 @@ async function replyForAssistant(input: {
   ]);
 }
 
+
+async function validateWidgetRequest(req: any, publicKey: string) {
+  const widget = await resolveWidget(publicKey);
+  if (!widget) return { error: { status: 404, message: "مفتاح الودجت غير صالح" } } as const;
+  if (!widget.enabled) return { error: { status: 403, message: "الودجت متوقف من لوحة التحكم" } } as const;
+  if (widget.assistant.status === "ARCHIVED") return { error: { status: 403, message: "المساعد مؤرشف" } } as const;
+  const domain = requestDomain(req);
+  if (!domainAllowed(domain, widget.allowedDomains)) {
+    return { error: { status: 403, message: "هذا النطاق غير مسموح" } } as const;
+  }
+  return { widget, domain } as const;
+}
+
 publicAssistantRouter.post("/:assistantId/chat", async (req, res) => {
   const apiKey = String(req.headers["x-nexora-key"] || "");
   if (!apiKey) return res.status(401).json({ error: "API key مطلوب" });
@@ -192,24 +205,9 @@ publicAssistantRouter.post("/widget/:publicKey/chat", async (req, res) => {
     pageUrl: z.string().url().max(2000).optional()
   }).parse(req.body);
 
-  const widget = await resolveWidget(String(req.params.publicKey));
-  if (!widget) {
-    console.warn("Nexora widget chat: public key not found", { publicKey: String(req.params.publicKey) });
-    return res.status(404).json({ error: "مفتاح الودجت غير صالح" });
-  }
-  if (!widget.enabled) {
-    console.warn("Nexora widget chat: widget disabled", { assistantId: widget.assistantId });
-    return res.status(403).json({ error: "الودجت متوقف من لوحة التحكم" });
-  }
-  if (widget.assistant.status === "ARCHIVED") {
-    console.warn("Nexora widget chat: assistant archived", { assistantId: widget.assistantId });
-    return res.status(403).json({ error: "المساعد مؤرشف" });
-  }
-
-  const domain = requestDomain(req);
-  if (!domainAllowed(domain, widget.allowedDomains)) {
-    return res.status(403).json({ error: "هذا النطاق غير مسموح" });
-  }
+  const validated = await validateWidgetRequest(req, String(req.params.publicKey));
+  if ("error" in validated) return res.status(validated.error.status).json({ error: validated.error.message });
+  const { widget, domain } = validated;
 
   const sessionKey = body.sessionKey || randomToken(18);
   const conversation = await getOrCreateConversation({
@@ -225,6 +223,24 @@ publicAssistantRouter.post("/widget/:publicKey/chat", async (req, res) => {
       userAgent: String(req.headers["user-agent"] || "").slice(0, 500)
     }
   });
+
+  if (conversation.handoffStatus === "WAITING" || conversation.handoffStatus === "AGENT") {
+    const saved = await prisma.assistantMessage.create({
+      data: { conversationId: conversation.id, role: "user", content: body.message }
+    });
+    await prisma.assistantConversation.update({
+      where: { id: conversation.id },
+      data: { lastMessageAt: new Date(), status: "OPEN" }
+    });
+    return res.json({
+      sessionKey,
+      mode: conversation.handoffStatus,
+      messageId: saved.id,
+      reply: conversation.handoffStatus === "WAITING"
+        ? "تم إرسال رسالتك. أنت الآن بانتظار أحد الموظفين."
+        : null
+    });
+  }
 
   const history = await prisma.assistantMessage.findMany({
     where: { conversationId: conversation.id },
@@ -259,6 +275,75 @@ publicAssistantRouter.post("/widget/:publicKey/chat", async (req, res) => {
   });
 
   res.json({ sessionKey, reply });
+});
+
+
+publicAssistantRouter.post("/widget/:publicKey/handoff", async (req, res) => {
+  const body = z.object({
+    sessionKey: z.string().max(200).optional(),
+    visitorId: z.string().max(200).optional(),
+    visitorName: z.string().max(120).optional(),
+    visitorEmail: z.string().email().max(200).optional().or(z.literal("")),
+    pageUrl: z.string().url().max(2000).optional(),
+    reason: z.string().max(1000).optional()
+  }).parse(req.body || {});
+
+  const validated = await validateWidgetRequest(req, String(req.params.publicKey));
+  if ("error" in validated) return res.status(validated.error.status).json({ error: validated.error.message });
+  const { widget, domain } = validated;
+  const sessionKey = body.sessionKey || randomToken(18);
+  const conversation = await getOrCreateConversation({
+    assistantId: widget.assistant.id,
+    sessionKey,
+    source: "widget",
+    data: {
+      sourceDomain: domain || undefined,
+      pageUrl: body.pageUrl,
+      visitorId: body.visitorId,
+      visitorName: body.visitorName,
+      visitorEmail: body.visitorEmail || undefined,
+      userAgent: String(req.headers["user-agent"] || "").slice(0, 500)
+    }
+  });
+
+  const firstRequest = conversation.handoffStatus === "AI";
+  const updated = await prisma.assistantConversation.update({
+    where: { id: conversation.id },
+    data: {
+      handoffStatus: "WAITING",
+      handoffRequestedAt: conversation.handoffRequestedAt || new Date(),
+      status: "OPEN",
+      lastMessageAt: new Date()
+    }
+  });
+  if (firstRequest) {
+    await prisma.assistantMessage.create({
+      data: {
+        conversationId: conversation.id,
+        role: "system",
+        content: body.reason ? `طلب الزائر التواصل مع موظف: ${body.reason}` : "طلب الزائر التواصل مع موظف."
+      }
+    });
+  }
+  res.json({ sessionKey, handoffStatus: updated.handoffStatus, message: "تم تحويل المحادثة إلى فريق الدعم." });
+});
+
+publicAssistantRouter.get("/widget/:publicKey/session/:sessionKey", async (req, res) => {
+  const validated = await validateWidgetRequest(req, String(req.params.publicKey));
+  if ("error" in validated) return res.status(validated.error.status).json({ error: validated.error.message });
+  const { widget } = validated;
+  const conversation = await prisma.assistantConversation.findFirst({
+    where: { assistantId: widget.assistant.id, sessionKey: String(req.params.sessionKey) },
+    include: { messages: { orderBy: { createdAt: "asc" }, take: 200 } }
+  });
+  if (!conversation) return res.status(404).json({ error: "جلسة المحادثة غير موجودة" });
+  res.json({
+    id: conversation.id,
+    status: conversation.status,
+    handoffStatus: conversation.handoffStatus,
+    agentDisplayName: conversation.agentDisplayName,
+    messages: conversation.messages
+  });
 });
 
 // Backward compatibility for older embed snippets.

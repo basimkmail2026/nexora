@@ -366,6 +366,82 @@ assistantRouter.patch("/:id/conversations/:conversationId", async (req: AuthRequ
   }));
 });
 
+
+assistantRouter.post("/:id/conversations/:conversationId/claim", async (req: AuthRequest, res) => {
+  const conversation = await prisma.assistantConversation.findFirst({
+    where: {
+      id: String(req.params.conversationId),
+      assistant: { id: String(req.params.id), userId: req.auth!.userId }
+    }
+  });
+  if (!conversation) return res.status(404).json({ error: "المحادثة غير موجودة" });
+
+  const user = await prisma.user.findUnique({ where: { id: req.auth!.userId } });
+  const updated = await prisma.assistantConversation.update({
+    where: { id: conversation.id },
+    data: {
+      handoffStatus: "AGENT",
+      assignedToId: req.auth!.userId,
+      agentDisplayName: user?.displayName || user?.email || "موظف الدعم",
+      handoffClaimedAt: new Date(),
+      status: "OPEN",
+      lastMessageAt: new Date()
+    }
+  });
+  await prisma.assistantMessage.create({
+    data: { conversationId: conversation.id, role: "system", content: `انضم ${updated.agentDisplayName || "موظف الدعم"} إلى المحادثة.` }
+  });
+  res.json(updated);
+});
+
+assistantRouter.post("/:id/conversations/:conversationId/reply", async (req: AuthRequest, res) => {
+  const body = z.object({ message: z.string().min(1).max(12000) }).parse(req.body);
+  const conversation = await prisma.assistantConversation.findFirst({
+    where: {
+      id: String(req.params.conversationId),
+      assistant: { id: String(req.params.id), userId: req.auth!.userId }
+    }
+  });
+  if (!conversation) return res.status(404).json({ error: "المحادثة غير موجودة" });
+  if (conversation.handoffStatus !== "AGENT") {
+    return res.status(409).json({ error: "استلم المحادثة أولًا قبل إرسال رد موظف" });
+  }
+
+  const message = await prisma.assistantMessage.create({
+    data: { conversationId: conversation.id, role: "agent", content: body.message }
+  });
+  await prisma.assistantConversation.update({
+    where: { id: conversation.id },
+    data: { lastMessageAt: new Date(), status: "OPEN" }
+  });
+  res.status(201).json(message);
+});
+
+assistantRouter.post("/:id/conversations/:conversationId/return-ai", async (req: AuthRequest, res) => {
+  const conversation = await prisma.assistantConversation.findFirst({
+    where: {
+      id: String(req.params.conversationId),
+      assistant: { id: String(req.params.id), userId: req.auth!.userId }
+    }
+  });
+  if (!conversation) return res.status(404).json({ error: "المحادثة غير موجودة" });
+
+  const updated = await prisma.assistantConversation.update({
+    where: { id: conversation.id },
+    data: {
+      handoffStatus: "AI",
+      assignedToId: null,
+      agentDisplayName: null,
+      handoffResolvedAt: new Date(),
+      lastMessageAt: new Date()
+    }
+  });
+  await prisma.assistantMessage.create({
+    data: { conversationId: conversation.id, role: "system", content: "تمت إعادة المحادثة إلى المساعد الذكي." }
+  });
+  res.json(updated);
+});
+
 assistantRouter.post("/:id/test-chat", async (req: AuthRequest, res) => {
   const body = z.object({
     message: z.string().min(1).max(12000),
