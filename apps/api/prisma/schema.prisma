@@ -386,6 +386,69 @@ model AssistantMessage {
 }
 
 
+
+enum OnboardingRequestStatus {
+  PENDING_REVIEW
+  NEEDS_INFO
+  IN_PROGRESS
+  READY_FOR_TEST
+  ACTIVE
+  REJECTED
+  CLOSED
+}
+
+model OnboardingRequest {
+  id                 String                  @id @default(cuid())
+  publicToken        String                  @unique @default(cuid())
+  fullName           String
+  companyName        String
+  email              String
+  phone              String?
+  websiteUrl         String
+  assistantName      String
+  businessDescription String
+  language           String                  @default("ar")
+  channelPreference  String                  @default("BOTH")
+  status             OnboardingRequestStatus @default(PENDING_REVIEW)
+  assignedToId       String?
+  assistantPublicKey String?
+  embedCode          String?
+  notes              String?
+  lastMessageAt      DateTime                @default(now())
+  messages           OnboardingMessage[]
+  files              OnboardingFile[]
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  @@index([email])
+  @@index([status])
+  @@index([lastMessageAt])
+}
+
+model OnboardingMessage {
+  id        String            @id @default(cuid())
+  requestId String
+  request   OnboardingRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  sender    String
+  content   String
+  createdAt DateTime          @default(now())
+
+  @@index([requestId, createdAt])
+}
+
+model OnboardingFile {
+  id           String            @id @default(cuid())
+  requestId    String
+  request      OnboardingRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  storagePath  String
+  createdAt    DateTime          @default(now())
+
+  @@index([requestId])
+}
+
 enum SubscriptionStatus {
   TRIALING
   ACTIVE

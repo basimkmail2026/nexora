@@ -7,13 +7,15 @@ import Billing from "./components/Billing";
 import AssistantBuilder from "./components/AssistantBuilder";
 import Marketplace from "./components/Marketplace";
 import Analytics from "./components/Analytics";
+import OnboardingPage from "./components/OnboardingPage";
+import OnboardingAdmin from "./components/OnboardingAdmin";
 
 type Role = "user" | "assistant";
 type Msg = { role: Role; content: string };
 type UploadItem = { id: string; name: string; mimeType: string; sizeBytes: number; status: string };
 type ConversationAttachment = { id: string; originalName: string; mimeType: string; sizeBytes: number; status: string };
 type View = "chat" | "assistants" | "billing" | "marketplace" | "analytics" | "settings" | "admin";
-type AdminTab = "overview" | "knowledge" | "connections";
+type AdminTab = "overview" | "knowledge" | "connections" | "onboarding";
 
 const dictionary = {
   ar: {
@@ -169,10 +171,12 @@ function AdminConsole({ t, me, onClose }: any) {
       <button className={tab === "overview" ? "active" : ""} onClick={() => setTab("overview")}>◫ {t.overview}</button>
       <button className={tab === "knowledge" ? "active" : ""} onClick={() => setTab("knowledge")}>◇ {t.knowledge}</button>
       <button onClick={() => setTab("connections")}>⌁ {t.connections}</button>
+      <button className={tab === "onboarding" ? "active" : ""} onClick={() => setTab("onboarding")}>◈ طلبات المساعدين</button>
       <div className="navSpacer" />
       <button onClick={onClose}>← {t.back}</button>
     </aside>
     <section className="adminContent">
+      {tab === "onboarding" && <OnboardingAdmin />}
       {tab === "overview" && <>
         <div className="contentHead"><div><span className="eyebrow">CONTROL CENTER</span><h1>{t.admin}</h1></div></div>
         <div className="metricGrid">{stats && Object.entries(stats).map(([key, value]) => <div className="metric" key={key}><span>{key}</span><b>{String(value)}</b><small>Live database metric</small></div>)}</div>
@@ -211,6 +215,7 @@ function UserSettings({ t, locale, setLocale, theme, setTheme }: any) {
 }
 
 function App() {
+  if (["/assistant-request", "/nexora-test.html", "/onboarding"].includes(window.location.pathname)) return <OnboardingPage />;
   const [locale, setLocaleState] = useState<Locale>(detectedLocale());
   const t = dictionary[locale];
   const [theme, setThemeState] = useState(localStorage.getItem("nexoraTheme") || "system");

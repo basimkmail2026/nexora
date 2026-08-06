@@ -1,12 +1,12 @@
 {
   "name": "nexora-v1",
   "private": true,
-  "version": "3.0.4-rc.1",
+  "version": "3.1.0-rc.1",
   "workspaces": [
     "apps/*"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev -w @nexora/api\" \"npm run dev -w @nexora/web\"",
+    "dev": "npm run dev -w @nexora/api & npm run dev -w @nexora/web",
     "build": "npm run build -w @nexora/web && npm run build -w @nexora/api",
     "start": "npm run start -w @nexora/api",
     "db:generate": "npm run db:generate -w @nexora/api",
@@ -17,8 +17,5 @@
   },
   "engines": {
     "node": "20.x"
-  },
-  "devDependencies": {
-    "concurrently": "^9.1.2"
   }
 }

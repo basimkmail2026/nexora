@@ -25,6 +25,7 @@ import { requestId, noStoreSensitive } from "./middleware/security.js";
 import { connectionsRouter } from "./modules/connections/connections.routes.js";
 import { systemRouter } from "./modules/system/system.routes.js";
 import { uploadRouter } from "./modules/uploads/upload.routes.js";
+import { onboardingRouter } from "./modules/onboarding/onboarding.routes.js";
 
 export const app = express();
 // Dynamic chat/session endpoints must not rely on ETags because embedded widgets
@@ -38,6 +39,7 @@ app.use(pinoHttp({ logger }));
 app.use(noStoreSensitive);
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: "2mb" }));
+app.use("/api/onboarding", cors({ origin: true, credentials: false, methods: ["GET", "POST", "PATCH", "OPTIONS"], allowedHeaders: ["Content-Type", "Authorization", "X-Onboarding-Token"] }));
 app.use("/api/public/assistants", cors({
   origin: true,
   credentials: false,
@@ -64,6 +66,7 @@ app.use("/api/voice", voiceRouter);
 app.use("/api/admin/connections", connectionsRouter);
 app.use("/api/admin/system", systemRouter);
 app.use("/api/uploads", uploadRouter);
+app.use("/api/onboarding", onboardingRouter);
 
 if (env.NODE_ENV === "production") {
   const webDist = path.resolve(__dirname, "../../web/dist");
