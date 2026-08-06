@@ -8,14 +8,55 @@ html,body,#root{height:100%}body{overflow:hidden}.workspace{height:100dvh;min-he
 
 @media(max-width:700px){body{overflow:hidden}.workspace{height:100dvh}.workspaceHead{height:52px;flex-basis:52px}.chatStream{padding:18px 12px 24px}.composerDock{padding:9px 8px max(9px,env(safe-area-inset-bottom))}.composerDock>small{display:none}.composerBox{border-radius:17px}.jumpLatest{bottom:84px}.marketPage{padding:14px 12px 40px}.marketHero{grid-template-columns:1fr;padding:62px 22px 24px;border-radius:22px}.marketHeroStat{display:none}.marketHero h1{font-size:34px;letter-spacing:-1.2px}.marketToolbar{grid-template-columns:1fr}.marketGrid{grid-template-columns:1fr}}
 
-.adminPage,
-.assistantsPage,
-.marketplacePage,
-.pageContent {
+/* Nexora Website Embed Manager */
+.assistantsPage {
   height: 100%;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-bottom: 80px;
+  padding-bottom: 96px;
   -webkit-overflow-scrolling: touch;
+}
+.assistantCreateCard { margin-bottom: 18px; }
+.inlineForm { display: flex; gap: 10px; }
+.inlineForm input { flex: 1; }
+.assistantGrid { display: grid; grid-template-columns: repeat(auto-fill,minmax(240px,1fr)); gap: 14px; }
+.assistantCard { display: flex; align-items: center; gap: 13px; text-align: start; cursor: pointer; width: 100%; }
+.assistantAvatar { width: 46px; height: 46px; border-radius: 14px; background: var(--primary,#6d4aff); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 20px; flex: 0 0 auto; }
+.assistantCard h3,.assistantCard p { margin: 0 0 5px; }
+.assistantTabs { display: flex; gap: 7px; overflow-x: auto; padding: 4px 0 14px; position: sticky; top: 0; z-index: 5; background: var(--bg,#0f1015); }
+.assistantTabs button { white-space: nowrap; background: transparent; border: 1px solid var(--border,#2b2d36); color: inherit; }
+.assistantTabs button.active { background: var(--primary,#6d4aff); color: #fff; border-color: var(--primary,#6d4aff); }
+.assistantSection { min-width: 0; }
+.assistantSection input,.assistantSection textarea,.assistantSection select { width: 100%; box-sizing: border-box; }
+.assistantSection .formGrid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; margin: 16px 0; }
+.assistantSection label { display: grid; gap: 7px; }
+.assistantSection .fullWidth { grid-column: 1 / -1; }
+.assistantSection .toggleLine { display: flex; align-items: center; gap: 9px; }
+.assistantSection .toggleLine input { width: auto; }
+.widgetLayout { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(300px,.8fr); gap: 16px; align-items: start; }
+.copyBlock { display: flex; align-items: stretch; gap: 8px; margin: 10px 0; }
+.copyBlock code { flex: 1; min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; padding: 12px; border-radius: 10px; background: rgba(127,127,127,.12); }
+.embedCode { flex-direction: column; }
+.embedChecklist { display: grid; gap: 7px; margin-top: 18px; padding: 14px; border: 1px solid var(--border,#2b2d36); border-radius: 12px; }
+.conversationAdminLayout { display: grid; grid-template-columns: minmax(280px,.38fr) minmax(0,.62fr); gap: 16px; min-height: 600px; }
+.conversationList,.conversationDetail { min-height: 0; }
+.sectionHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.conversationItem { display: grid; width: 100%; text-align: start; gap: 3px; padding: 12px; margin-top: 8px; border: 1px solid var(--border,#2b2d36); background: transparent; color: inherit; border-radius: 12px; }
+.conversationItem.active { border-color: var(--primary,#6d4aff); background: rgba(109,74,255,.1); }
+.conversationItem span,.conversationItem small { opacity: .7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.visitorMeta { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; padding: 12px; border-radius: 12px; background: rgba(127,127,127,.1); margin-bottom: 12px; overflow-wrap: anywhere; }
+.conversationMessages { max-height: 470px; overflow-y: auto; padding: 8px; border: 1px solid var(--border,#2b2d36); border-radius: 12px; margin-bottom: 12px; }
+.adminMessage { max-width: 85%; padding: 10px 12px; margin: 8px 0; border-radius: 12px; background: rgba(127,127,127,.12); }
+.adminMessage.user { margin-inline-start: auto; background: rgba(109,74,255,.16); }
+.adminMessage p { margin: 5px 0 0; white-space: pre-wrap; }
+@media (max-width: 900px) {
+  .widgetLayout,.conversationAdminLayout { grid-template-columns: 1fr; }
+  .conversationAdminLayout { min-height: 0; }
+}
+@media (max-width: 650px) {
+  .assistantSection .formGrid { grid-template-columns: 1fr; }
+  .assistantSection .fullWidth { grid-column: auto; }
+  .inlineForm { flex-direction: column; }
+  .visitorMeta { grid-template-columns: 1fr; }
 }

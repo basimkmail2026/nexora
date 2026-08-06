@@ -9,6 +9,7 @@ import { AuthRequest, requireAuth } from "../../middleware/auth.js";
 import { randomToken, sha256 } from "../../lib/security.js";
 import { generateReply } from "../ai/ai.service.js";
 import { chunkText, extractText } from "./document.service.js";
+import { getAssistantContext } from "./context.service.js";
 
 export const assistantRouter = Router();
 assistantRouter.use(requireAuth);
@@ -276,8 +277,14 @@ assistantRouter.put("/:id/widget", async (req: AuthRequest, res) => {
     enabled: z.boolean().optional(),
     primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
     position: z.enum(["bottom-right", "bottom-left"]).optional(),
+    theme: z.enum(["auto", "light", "dark"]).optional(),
     welcomeMessage: z.string().max(500).optional(),
-    allowedDomains: z.array(z.string()).optional()
+    inputPlaceholder: z.string().max(160).optional(),
+    launcherLabel: z.string().max(60).optional(),
+    showBranding: z.boolean().optional(),
+    collectVisitorInfo: z.boolean().optional(),
+    privacyUrl: z.string().url().max(2000).nullable().optional(),
+    allowedDomains: z.array(z.string().max(255)).max(100).optional()
   }).parse(req.body);
 
   res.json(await prisma.assistantWidget.upsert({
@@ -287,30 +294,64 @@ assistantRouter.put("/:id/widget", async (req: AuthRequest, res) => {
   }));
 });
 
-async function getContext(assistantId: string, question: string) {
-  const words = question.toLowerCase().split(/\s+/).filter(x => x.length > 2).slice(0, 12);
-  const chunks = await prisma.documentChunk.findMany({
-    where: { document: { knowledgeBase: { assistantId } } },
-    take: 120
+assistantRouter.post("/:id/widget/regenerate-key", async (req: AuthRequest, res) => {
+  const assistant = await prisma.assistant.findFirst({
+    where: { id: String(req.params.id), userId: req.auth!.userId }
   });
+  if (!assistant) return res.status(404).json({ error: "المساعد غير موجود" });
 
-  const scored = chunks.map(c => ({
-    content: c.content,
-    score: words.reduce((sum, word) => sum + (c.content.toLowerCase().includes(word) ? 1 : 0), 0)
-  })).sort((a, b) => b.score - a.score).slice(0, 6).filter(x => x.score > 0);
-
-  const faqs = await prisma.faqItem.findMany({
-    where: { assistantId, enabled: true },
-    take: 100
+  const widget = await prisma.assistantWidget.upsert({
+    where: { assistantId: assistant.id },
+    update: { publicKey: randomToken(24) },
+    create: { assistantId: assistant.id, publicKey: randomToken(24) }
   });
+  res.json({ publicKey: widget.publicKey });
+});
 
-  const faqMatches = faqs.map(f => ({
-    content: `سؤال: ${f.question}\nجواب: ${f.answer}`,
-    score: words.reduce((sum, word) => sum + ((f.question + " " + f.answer).toLowerCase().includes(word) ? 1 : 0), 0)
-  })).sort((a, b) => b.score - a.score).slice(0, 4).filter(x => x.score > 0);
+assistantRouter.get("/:id/conversations", async (req: AuthRequest, res) => {
+  const assistant = await prisma.assistant.findFirst({
+    where: { id: String(req.params.id), userId: req.auth!.userId }
+  });
+  if (!assistant) return res.status(404).json({ error: "المساعد غير موجود" });
 
-  return [...faqMatches, ...scored].map(x => x.content).join("\n\n---\n\n");
-}
+  const items = await prisma.assistantConversation.findMany({
+    where: { assistantId: assistant.id },
+    orderBy: { lastMessageAt: "desc" },
+    take: 100,
+    include: {
+      _count: { select: { messages: true } },
+      messages: { orderBy: { createdAt: "desc" }, take: 1 }
+    }
+  });
+  res.json(items);
+});
+
+assistantRouter.get("/:id/conversations/:conversationId", async (req: AuthRequest, res) => {
+  const conversation = await prisma.assistantConversation.findFirst({
+    where: {
+      id: String(req.params.conversationId),
+      assistant: { id: String(req.params.id), userId: req.auth!.userId }
+    },
+    include: { messages: { orderBy: { createdAt: "asc" } } }
+  });
+  if (!conversation) return res.status(404).json({ error: "المحادثة غير موجودة" });
+  res.json(conversation);
+});
+
+assistantRouter.patch("/:id/conversations/:conversationId", async (req: AuthRequest, res) => {
+  const status = z.enum(["OPEN", "RESOLVED", "ARCHIVED"]).parse(req.body?.status);
+  const conversation = await prisma.assistantConversation.findFirst({
+    where: {
+      id: String(req.params.conversationId),
+      assistant: { id: String(req.params.id), userId: req.auth!.userId }
+    }
+  });
+  if (!conversation) return res.status(404).json({ error: "المحادثة غير موجودة" });
+  res.json(await prisma.assistantConversation.update({
+    where: { id: conversation.id },
+    data: { status }
+  }));
+});
 
 assistantRouter.post("/:id/test-chat", async (req: AuthRequest, res) => {
   const body = z.object({
@@ -343,7 +384,7 @@ assistantRouter.post("/:id/test-chat", async (req: AuthRequest, res) => {
     take: 16
   });
 
-  const context = await getContext(assistant.id, body.message);
+  const context = await getAssistantContext(assistant.id, body.message);
   const prompt = [
     assistant.systemPrompt,
     context ? `قاعدة المعرفة:\n${context}` : "",

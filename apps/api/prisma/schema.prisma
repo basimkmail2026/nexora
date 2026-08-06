@@ -325,29 +325,47 @@ model AssistantApiKey {
 }
 
 model AssistantWidget {
-  id             String    @id @default(cuid())
-  assistantId    String    @unique
-  assistant      Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
-  enabled        Boolean   @default(true)
-  primaryColor   String    @default("#6d4aff")
-  position       String    @default("bottom-right")
-  welcomeMessage String    @default("مرحبًا! كيف أقدر أساعدك؟")
-  allowedDomains String[]
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  assistantId       String    @unique
+  assistant         Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  publicKey         String    @unique @default(cuid())
+  enabled           Boolean   @default(true)
+  primaryColor      String    @default("#6d4aff")
+  position          String    @default("bottom-right")
+  theme             String    @default("auto")
+  welcomeMessage    String    @default("مرحبًا! كيف أقدر أساعدك؟")
+  inputPlaceholder  String    @default("اكتب رسالتك...")
+  launcherLabel     String    @default("محادثة")
+  showBranding      Boolean   @default(true)
+  collectVisitorInfo Boolean  @default(false)
+  privacyUrl        String?
+  allowedDomains    String[]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 }
 
 model AssistantConversation {
-  id          String    @id @default(cuid())
-  assistantId String
-  assistant   Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
-  sessionKey  String
-  messages    AssistantMessage[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  assistantId   String
+  assistant     Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  sessionKey    String
+  source        String    @default("dashboard")
+  sourceDomain  String?
+  pageUrl       String?
+  visitorId     String?
+  visitorName   String?
+  visitorEmail  String?
+  userAgent     String?
+  status        String    @default("OPEN")
+  lastMessageAt DateTime  @default(now())
+  messages      AssistantMessage[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([assistantId])
   @@index([sessionKey])
+  @@index([sourceDomain])
+  @@index([lastMessageAt])
 }
 
 model AssistantMessage {

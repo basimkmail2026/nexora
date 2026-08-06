@@ -34,8 +34,14 @@ app.use(requestId);
 app.use(pinoHttp({ logger }));
 app.use(noStoreSensitive);
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors({ origin: env.CORS_ORIGIN.split(","), credentials: true }));
 app.use(express.json({ limit: "2mb" }));
+app.use("/api/public/assistants", cors({
+  origin: true,
+  credentials: false,
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "X-Nexora-Key"]
+}));
+app.use(cors({ origin: env.CORS_ORIGIN.split(","), credentials: true }));
 app.use(rateLimit({ windowMs: 60_000, limit: 120 }));
 app.use("/api", apiLog);
 
