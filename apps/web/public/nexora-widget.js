@@ -304,17 +304,36 @@
         })
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "فشل الاتصال");
+      if (!response.ok) {
+        if (data.sessionKey) {
+          sessionKey = data.sessionKey;
+          localStorage.setItem(`${storagePrefix}_session`, sessionKey);
+        }
+        const error = new Error(data.error || "فشل الاتصال");
+        error.canHandoff = Boolean(data.canHandoff);
+        throw error;
+      }
       typing(false);
       sessionKey = data.sessionKey;
       localStorage.setItem(`${storagePrefix}_session`, sessionKey);
       handoffStatus = data.mode || handoffStatus;
       updateHandoffUi();
-      if (data.reply) bubble(data.reply, false);
+      if (data.reply) bubble(data.reply, false, data.aiUnavailable ? "nx-system" : "");
       ensurePolling();
     } catch (error) {
       typing(false);
-      bubble(error.message || "تعذر الاتصال", false, "nx-error");
+      const row = bubble(error.message || "تعذر الاتصال", false, "nx-error");
+      if (error.canHandoff) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "nx-retry";
+        button.textContent = "تحويل إلى موظف";
+        button.addEventListener("click", async () => {
+          row.remove();
+          await requestHandoff();
+        });
+        row.querySelector(".nx-bubble")?.appendChild(button);
+      }
     } finally {
       busy = false;
       $(".nx-send").disabled = false;

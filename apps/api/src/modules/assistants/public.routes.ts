@@ -249,32 +249,91 @@ publicAssistantRouter.post("/widget/:publicKey/chat", async (req, res) => {
   });
 
   const started = Date.now();
-  const reply = await replyForAssistant({
-    assistant: widget.assistant,
-    message: body.message,
-    history: history.reverse().map(item => ({ role: item.role, content: item.content }))
-  });
 
-  await prisma.$transaction([
-    prisma.assistantMessage.create({
-      data: { conversationId: conversation.id, role: "user", content: body.message }
-    }),
-    prisma.assistantMessage.create({
-      data: { conversationId: conversation.id, role: "assistant", content: reply }
-    }),
-    prisma.assistantConversation.update({
-      where: { id: conversation.id },
-      data: { lastMessageAt: new Date() }
-    })
-  ]);
+  try {
+    const reply = await replyForAssistant({
+      assistant: widget.assistant,
+      message: body.message,
+      history: history.reverse().map(item => ({ role: item.role, content: item.content }))
+    });
 
-  await recordAssistantUsage({
-    assistantId: widget.assistant.id,
-    latencyMs: Date.now() - started,
-    fallback: reply.includes(widget.assistant.fallbackMessage)
-  });
+    await prisma.$transaction([
+      prisma.assistantMessage.create({
+        data: { conversationId: conversation.id, role: "user", content: body.message }
+      }),
+      prisma.assistantMessage.create({
+        data: { conversationId: conversation.id, role: "assistant", content: reply }
+      }),
+      prisma.assistantConversation.update({
+        where: { id: conversation.id },
+        data: { lastMessageAt: new Date() }
+      })
+    ]);
 
-  res.json({ sessionKey, reply });
+    await recordAssistantUsage({
+      assistantId: widget.assistant.id,
+      latencyMs: Date.now() - started,
+      fallback: reply.includes(widget.assistant.fallbackMessage)
+    });
+
+    return res.json({ sessionKey, mode: "AI", reply });
+  } catch (error: any) {
+    const message = String(error?.message || error || "");
+    const quotaExceeded = /quota|rate.?limit|resource_exhausted|429|free_tier_requests/i.test(message);
+
+    console.error("Nexora widget AI reply failed", {
+      assistantId: widget.assistant.id,
+      conversationId: conversation.id,
+      quotaExceeded,
+      error: message
+    });
+
+    if (quotaExceeded) {
+      const systemMessage = "المساعد الذكي مشغول حاليًا بسبب حد الاستخدام. تم تحويل المحادثة تلقائيًا إلى فريق الدعم، وسيتمكن الموظف من رؤية رسائلك السابقة والرد عليك من نفس المحادثة.";
+
+      await prisma.$transaction([
+        prisma.assistantMessage.create({
+          data: { conversationId: conversation.id, role: "user", content: body.message }
+        }),
+        prisma.assistantMessage.create({
+          data: { conversationId: conversation.id, role: "system", content: systemMessage }
+        }),
+        prisma.assistantConversation.update({
+          where: { id: conversation.id },
+          data: {
+            handoffStatus: "WAITING",
+            handoffRequestedAt: conversation.handoffRequestedAt || new Date(),
+            status: "OPEN",
+            lastMessageAt: new Date()
+          }
+        })
+      ]);
+
+      return res.status(202).json({
+        sessionKey,
+        mode: "WAITING",
+        aiUnavailable: true,
+        reply: systemMessage
+      });
+    }
+
+    await prisma.$transaction([
+      prisma.assistantMessage.create({
+        data: { conversationId: conversation.id, role: "user", content: body.message }
+      }),
+      prisma.assistantConversation.update({
+        where: { id: conversation.id },
+        data: { lastMessageAt: new Date(), status: "OPEN" }
+      })
+    ]);
+
+    return res.status(502).json({
+      error: "تعذر الحصول على رد من المساعد الآن. يمكنك طلب موظف من الزر الموجود أعلى المحادثة.",
+      code: "AI_PROVIDER_ERROR",
+      canHandoff: true,
+      sessionKey
+    });
+  }
 });
 
 
