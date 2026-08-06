@@ -157,6 +157,8 @@ publicAssistantRouter.post("/:assistantId/chat", async (req, res) => {
 });
 
 publicAssistantRouter.get("/widget/:publicKey/config", async (req, res) => {
+  // Nexora widget config must not be cached by browsers/CDNs after dashboard changes.
+  res.set({ "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", "Pragma": "no-cache", "Expires": "0" });
   const widget = await resolveWidget(String(req.params.publicKey));
   if (!widget) {
     console.warn("Nexora widget config: public key not found", { publicKey: String(req.params.publicKey) });
@@ -388,6 +390,14 @@ publicAssistantRouter.post("/widget/:publicKey/handoff", async (req, res) => {
 });
 
 publicAssistantRouter.get("/widget/:publicKey/session/:sessionKey", async (req, res) => {
+  // Polling responses must never be cached. A cached 304 response can hide new
+  // employee messages from the visitor even though they were saved correctly.
+  res.set({
+    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0",
+    "Surrogate-Control": "no-store"
+  });
   const validated = await validateWidgetRequest(req, String(req.params.publicKey));
   if ("error" in validated) return res.status(validated.error.status).json({ error: validated.error.message });
   const { widget } = validated;

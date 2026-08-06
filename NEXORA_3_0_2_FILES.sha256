@@ -1,0 +1,6 @@
+6ab242fa18ac6da84d97a4c8da494ae85520f2ebea1811fd3d1bb26212fe5f07  apps/api/src/app.ts
+2e0ab4deaeb33311b6e87d86bfdbbf24e3e16c8f841f1b867af98af0ae1afb51  apps/api/src/modules/assistants/public.routes.ts
+a4ca8bb61907533b622d016faa17e5cab587c347af066e29236e8f38f7ca9be9  apps/web/public/nexora-widget.js
+f9f4819e3f6d96b4b6b68f32dd3b96aa4943190571f2917d451a56c71072c68e  package.json
+880d12f22550af25d4550d74dc0bef1ad49131c94bc701edfdc73cce800b1785  apps/api/package.json
+79801218c81c668979806178bd117cfcf062550790c521f9ec831287ad24df0f  apps/web/package.json

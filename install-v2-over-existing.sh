@@ -18,7 +18,7 @@ rsync -a --delete \
 
 cd "$TARGET"
 git add -A
-git commit -m "Upgrade Nexora 2.3 conversation experience" || true
+git commit -m "Fix Nexora live AI and employee replies" || true
 git push
 
 echo "Done. Render should deploy automatically."

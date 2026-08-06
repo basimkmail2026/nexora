@@ -196,9 +196,18 @@
   async function pollSession() {
     if (!sessionKey || !box.classList.contains("open")) return;
     try {
-      const response = await fetch(`${apiBase}/api/public/assistants/widget/${encodeURIComponent(publicKey)}/session/${encodeURIComponent(sessionKey)}?pageUrl=${encodeURIComponent(location.href)}`);
+      const pollUrl = `${apiBase}/api/public/assistants/widget/${encodeURIComponent(publicKey)}/session/${encodeURIComponent(sessionKey)}?pageUrl=${encodeURIComponent(location.href)}&_=${Date.now()}`;
+      const response = await fetch(pollUrl, {
+        method: "GET",
+        cache: "no-store",
+        credentials: "omit",
+        headers: { "Accept": "application/json", "Cache-Control": "no-cache" }
+      });
+      if (!response.ok) {
+        console.warn("Nexora Widget session polling returned", response.status);
+        return;
+      }
       const data = await response.json();
-      if (!response.ok) return;
       handoffStatus = data.handoffStatus || "AI";
       updateHandoffUi();
       (data.messages || []).forEach(renderServerMessage);
@@ -209,7 +218,7 @@
 
   function ensurePolling() {
     if (pollTimer) return;
-    pollTimer = setInterval(pollSession, 3500);
+    pollTimer = setInterval(pollSession, 1500);
   }
 
   async function requestHandoff() {
@@ -235,6 +244,7 @@
       updateHandoffUi();
       bubble(data.message || "تم تحويل المحادثة إلى موظف.", false, "", "system");
       ensurePolling();
+      window.setTimeout(pollSession, 250);
     } catch (error) {
       bubble(error.message || "تعذر تحويل المحادثة", false, "nx-error");
     } finally {
@@ -320,6 +330,7 @@
       updateHandoffUi();
       if (data.reply) bubble(data.reply, false, data.aiUnavailable ? "nx-system" : "");
       ensurePolling();
+      window.setTimeout(pollSession, 250);
     } catch (error) {
       typing(false);
       const row = bubble(error.message || "تعذر الاتصال", false, "nx-error");
@@ -375,6 +386,13 @@
       input.dispatchEvent(new Event("input"));
     };
     recognition.start();
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && box.classList.contains("open")) pollSession();
+  });
+  window.addEventListener("focus", () => {
+    if (box.classList.contains("open")) pollSession();
   });
 
   updateHandoffUi();

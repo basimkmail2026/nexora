@@ -27,6 +27,9 @@ import { systemRouter } from "./modules/system/system.routes.js";
 import { uploadRouter } from "./modules/uploads/upload.routes.js";
 
 export const app = express();
+// Dynamic chat/session endpoints must not rely on ETags because embedded widgets
+// poll for live employee replies through browsers and CDNs.
+app.set("etag", false);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 app.set("trust proxy", 1);
