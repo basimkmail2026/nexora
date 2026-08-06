@@ -202,7 +202,7 @@ function AdminConsole({ t, me, onClose }: any) {
 function UserSettings({ t, locale, setLocale, theme, setTheme }: any) {
   return <div className="pageCanvas"><div className="contentHead"><div><span className="eyebrow">PERSONALIZATION</span><h1>{t.settings}</h1></div></div>
     <div className="settingsGrid">
-      <div className="panel"><h3>{t.language}</h3><select value={locale} onChange={e => setLocale(e.target.value)}><option value="ar">العربية</option><option value="en">English</option></select><p>The interface opens using the device language on first visit.</p></div>
+      <div className="panel"><h3>{t.languageSetting}</h3><select value={locale} onChange={e => setLocale(e.target.value)}><option value="ar">العربية</option><option value="en">English</option></select><p>The interface opens using the device language on first visit.</p></div>
       <div className="panel"><h3>{t.appearance}</h3><select value={theme} onChange={e => setTheme(e.target.value)}><option value="system">{t.themeSystem}</option><option value="light">{t.themeLight}</option><option value="dark">{t.themeDark}</option></select></div>
       <div className="panel"><h3>{t.memory}</h3><p>Nexora stores only useful preferences and explicit facts. Memory controls and deletion are available in the next settings update.</p></div>
     </div>
@@ -226,6 +226,9 @@ function App() {
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const chatStreamRef = useRef<HTMLDivElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const [showJump, setShowJump] = useState(false);
 
   function setLocale(next: Locale) { setLocaleState(next); localStorage.setItem("nexoraLocale", next); }
   function setTheme(next: string) { setThemeState(next); localStorage.setItem("nexoraTheme", next); }
@@ -263,6 +266,24 @@ function App() {
       if (fileRef.current) fileRef.current.value = "";
     }
   }
+
+  function jumpToLatest(behavior: ScrollBehavior = "smooth") {
+    chatEndRef.current?.scrollIntoView({ behavior, block: "end" });
+  }
+
+  function handleChatScroll() {
+    const el = chatStreamRef.current;
+    if (!el) return;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setShowJump(distance > 180);
+  }
+
+  useEffect(() => {
+    const el = chatStreamRef.current;
+    if (!el) return;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distance < 260) requestAnimationFrame(() => jumpToLatest("smooth"));
+  }, [messages, busy]);
 
   async function send() {
     const text = input.trim();
@@ -316,7 +337,7 @@ function App() {
       <div className="historyLabel">{t.chats}</div>
       <div className="conversationList">{conversations.map(item => <button key={item.id} onClick={() => openConversation(item.id)} className={conversationId === item.id ? "selected" : ""}>{item.title}</button>)}</div>
       <div className="sidebarBottom">
-        <button onClick={() => setLocale(locale === "ar" ? "en" : "ar")}>◎ {t.language}</button>
+        <button onClick={() => setLocale(locale === "ar" ? "en" : "ar")}>◎ {t.languageSetting}</button>
         {authenticated ? <button onClick={logout}>↪ {t.logout}</button> : <button onClick={() => location.reload()}>{t.login}</button>}
       </div>
     </aside>
@@ -324,11 +345,13 @@ function App() {
     <section className="workspace">
       {view === "settings" ? <UserSettings t={t} locale={locale} setLocale={setLocale} theme={theme} setTheme={setTheme} /> : <>
         <header className="workspaceHead"><div><span className="statusDot" /> Nexora AI</div><span className="modelPill">Multimodal workspace</span></header>
-        <div className="chatStream">
+        <div className="chatStream" ref={chatStreamRef} onScroll={handleChatScroll}>
           {!messages.length && <div className="welcomeState"><div className="welcomeIcon">✦</div><h1>{t.welcome}</h1><p>{t.welcomeSub}</p><div className="suggestionGrid"><button onClick={() => setInput(locale === "ar" ? "ما هي باقات نكسورا؟" : "What are Nexora's plans?")}>◫ Plans</button><button onClick={() => fileRef.current?.click()}>⌁ Analyze a file</button><button onClick={() => setInput(locale === "ar" ? "أين صُنعت نكسورا؟" : "Where was Nexora created?")}>◇ About Nexora</button></div></div>}
           {messages.map((message, index) => <article key={index} className={`chatMessage ${message.role}`}><div className="avatar">{message.role === "assistant" ? "N" : (me?.displayName?.[0] || "U")}</div><div className="bubble"><MessageBody content={message.content} t={t} />{message.role === "assistant" && <button className="messageCopy" onClick={() => navigator.clipboard.writeText(message.content)}>⌘ {t.copy}</button>}</div></article>)}
           {busy && <article className="chatMessage assistant"><div className="avatar">N</div><div className="bubble typing"><span /><span /><span /> {t.thinking}</div></article>}
+          <div ref={chatEndRef} className="chatEndAnchor" />
         </div>
+        {showJump && <button className="jumpLatest" onClick={() => jumpToLatest()}>↓ {locale === "ar" ? "آخر رسالة" : "Latest"}</button>}
         <div className="composerDock">
           {!!uploads.length && <div className="uploadTray"><span>{t.filesReady}</span>{uploads.map(file => <div className="fileChip" key={file.id}><b>{file.mimeType.startsWith("image/") ? "▧" : file.mimeType.startsWith("video/") ? "▶" : "▤"}</b><span>{file.name}</span><button onClick={() => setUploads(list => list.filter(item => item.id !== file.id))}>×</button></div>)}</div>}
           <div className="composerBox">

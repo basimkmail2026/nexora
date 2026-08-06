@@ -129,7 +129,6 @@ adminRouter.post("/platform-knowledge", async (req: AuthRequest, res) => {
     enabled: body.enabled,
     priority: body.priority
   };
-
   const row = await prisma.platformKnowledge.upsert({
     where: { key: body.key },
     update: data,
