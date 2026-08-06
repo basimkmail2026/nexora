@@ -64,8 +64,15 @@ onboardingRouter.post("/requests", upload.array("files", 8), async (req, res) =>
   const files = (req.files || []) as Express.Multer.File[];
   const row = await prisma.onboardingRequest.create({
     data: {
-      ...body,
+      fullName: body.fullName,
+      companyName: body.companyName,
+      email: body.email,
       phone: body.phone || null,
+      websiteUrl: body.websiteUrl,
+      assistantName: body.assistantName,
+      businessDescription: body.businessDescription,
+      language: body.language,
+      channelPreference: body.channelPreference,
       messages: {
         create: {
           sender: "SYSTEM",
