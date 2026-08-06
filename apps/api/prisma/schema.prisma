@@ -328,7 +328,7 @@ model AssistantWidget {
   id                String    @id @default(cuid())
   assistantId       String    @unique
   assistant         Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
-  publicKey         String    @unique @default(cuid())
+  publicKey         String    @unique @default(dbgenerated("md5(random()::text || clock_timestamp()::text)"))
   enabled           Boolean   @default(true)
   primaryColor      String    @default("#6d4aff")
   position          String    @default("bottom-right")
