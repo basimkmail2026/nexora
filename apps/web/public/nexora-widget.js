@@ -196,12 +196,17 @@
   async function pollSession() {
     if (!sessionKey || !box.classList.contains("open")) return;
     try {
-      const pollUrl = `${apiBase}/api/public/assistants/widget/${encodeURIComponent(publicKey)}/session/${encodeURIComponent(sessionKey)}?pageUrl=${encodeURIComponent(location.href)}&_=${Date.now()}`;
+      const pollUrl = `${apiBase}/api/public/assistants/widget/${encodeURIComponent(publicKey)}/session`;
       const response = await fetch(pollUrl, {
-        method: "GET",
+        method: "POST",
         cache: "no-store",
         credentials: "omit",
-        headers: { "Accept": "application/json", "Cache-Control": "no-cache" }
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache"
+        },
+        body: JSON.stringify({ sessionKey, pageUrl: location.href })
       });
       if (!response.ok) {
         console.warn("Nexora Widget session polling returned", response.status);

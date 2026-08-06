@@ -1,7 +1,7 @@
 {
   "name": "nexora-v1",
   "private": true,
-  "version": "3.0.2-rc.2",
+  "version": "3.0.3-rc.1",
   "workspaces": [
     "apps/*"
   ],
@@ -15,10 +15,10 @@
     "db:push": "npm run db:push -w @nexora/api",
     "db:prepare": "npm run db:push && npm run db:seed"
   },
-  "devDependencies": {
-    "concurrently": "^9.1.2"
-  },
   "engines": {
     "node": "20.x"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
   }
 }

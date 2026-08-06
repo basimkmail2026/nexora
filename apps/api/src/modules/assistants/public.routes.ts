@@ -389,30 +389,51 @@ publicAssistantRouter.post("/widget/:publicKey/handoff", async (req, res) => {
   res.json({ sessionKey, handoffStatus: updated.handoffStatus, message: "تم تحويل المحادثة إلى فريق الدعم." });
 });
 
-publicAssistantRouter.get("/widget/:publicKey/session/:sessionKey", async (req, res) => {
-  // Polling responses must never be cached. A cached 304 response can hide new
-  // employee messages from the visitor even though they were saved correctly.
+async function loadWidgetSession(req: any, publicKey: string, sessionKey: string) {
+  const validated = await validateWidgetRequest(req, publicKey);
+  if ("error" in validated) return validated;
+  const conversation = await prisma.assistantConversation.findFirst({
+    where: { assistantId: validated.widget.assistant.id, sessionKey },
+    include: { messages: { orderBy: { createdAt: "asc" }, take: 300 } }
+  });
+  if (!conversation) return { error: { status: 404, message: "جلسة المحادثة غير موجودة" } } as const;
+  return { conversation } as const;
+}
+
+function sendWidgetSession(res: any, conversation: any) {
   res.set({
     "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
     "Pragma": "no-cache",
     "Expires": "0",
-    "Surrogate-Control": "no-store"
+    "Surrogate-Control": "no-store",
+    "CDN-Cache-Control": "no-store"
   });
-  const validated = await validateWidgetRequest(req, String(req.params.publicKey));
-  if ("error" in validated) return res.status(validated.error.status).json({ error: validated.error.message });
-  const { widget } = validated;
-  const conversation = await prisma.assistantConversation.findFirst({
-    where: { assistantId: widget.assistant.id, sessionKey: String(req.params.sessionKey) },
-    include: { messages: { orderBy: { createdAt: "asc" }, take: 200 } }
-  });
-  if (!conversation) return res.status(404).json({ error: "جلسة المحادثة غير موجودة" });
-  res.json({
+  return res.json({
     id: conversation.id,
     status: conversation.status,
     handoffStatus: conversation.handoffStatus,
     agentDisplayName: conversation.agentDisplayName,
+    updatedAt: conversation.updatedAt,
     messages: conversation.messages
   });
+}
+
+// POST polling is the primary live-sync route. It carries pageUrl in the body,
+// so it still works on websites that suppress Referer/Origin headers.
+publicAssistantRouter.post("/widget/:publicKey/session", async (req, res) => {
+  const body = z.object({
+    sessionKey: z.string().min(1).max(200),
+    pageUrl: z.string().url().max(2000).optional()
+  }).parse(req.body || {});
+  const loaded = await loadWidgetSession(req, String(req.params.publicKey), body.sessionKey);
+  if ("error" in loaded) return res.status(loaded.error.status).json({ error: loaded.error.message });
+  return sendWidgetSession(res, loaded.conversation);
+});
+
+publicAssistantRouter.get("/widget/:publicKey/session/:sessionKey", async (req, res) => {
+  const loaded = await loadWidgetSession(req, String(req.params.publicKey), String(req.params.sessionKey));
+  if ("error" in loaded) return res.status(loaded.error.status).json({ error: loaded.error.message });
+  return sendWidgetSession(res, loaded.conversation);
 });
 
 // Backward compatibility for older embed snippets.
